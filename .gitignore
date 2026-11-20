@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.egg-info/
+*_trace.html
+*_trace.json*
+sigtrace-demo-*.html

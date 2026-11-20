@@ -1,0 +1,2116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sigtrace Viewer</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface: #fcfcfb; --surface-2: #f1f0ec; --hover: rgba(11,11,11,.05);
+  --text: #0b0b0b; --text-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,.10);
+  --accent: #2a78d6; --accent-wash: rgba(42,120,214,.12); --band: rgba(11,11,11,.025);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --other: #b5b3ab;
+  --good: #0ca30c; --warning: #fab219; --serious: #ec835a; --critical: #d03b3b;
+  --div-neg: #184f95; --div-mid: #f0efec; --div-pos: #b8302f; --nan: #fab219;
+  --seq: #cde2fb,#b7d3f6,#9ec5f4,#86b6ef,#6da7ec,#5598e7,#3987e5,#2a78d6,#256abf,#1c5cab,#184f95,#104281,#0d366b;
+  --sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface: #1a1a19; --surface-2: #242422; --hover: rgba(255,255,255,.05);
+    --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+    --accent: #3987e5; --accent-wash: rgba(57,135,229,.18); --band: rgba(255,255,255,.025);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --other: #5f5e5a;
+    --div-neg: #6da7ec; --div-mid: #383835; --div-pos: #e66767; --nan: #fab219;
+    --seq: #0d366b,#104281,#184f95,#1c5cab,#256abf,#2a78d6,#3987e5,#5598e7,#6da7ec,#86b6ef,#9ec5f4,#b7d3f6,#cde2fb;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface: #1a1a19; --surface-2: #242422; --hover: rgba(255,255,255,.05);
+  --text: #f0efec; --text-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,.10);
+  --accent: #3987e5; --accent-wash: rgba(57,135,229,.18); --band: rgba(255,255,255,.025);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --other: #5f5e5a;
+  --div-neg: #6da7ec; --div-mid: #383835; --div-pos: #e66767; --nan: #fab219;
+  --seq: #0d366b,#104281,#184f95,#1c5cab,#256abf,#2a78d6,#3987e5,#5598e7,#6da7ec,#86b6ef,#9ec5f4,#b7d3f6,#cde2fb;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { background: var(--page); color: var(--text); font: 13px/1.45 var(--sans); }
+button, select, input { font: inherit; color: inherit; }
+.mono { font-family: var(--mono); }
+.muted { color: var(--muted); }
+.sec { color: var(--text-2); }
+.num { font-variant-numeric: tabular-nums; }
+
+header {
+  position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+  padding: 10px 16px; background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 650; letter-spacing: .01em; display: flex; align-items: center; gap: 8px; }
+.brand svg { color: var(--accent); }
+.model { font-family: var(--mono); font-weight: 600; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.chip { padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-2); white-space: nowrap; }
+.spacer { flex: 1; }
+.btn {
+  border: 1px solid var(--border); background: var(--surface); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
+.btn:hover { background: var(--hover); }
+.btn[aria-pressed="true"] { background: var(--accent-wash); border-color: var(--accent); }
+.icon-btn { width: 30px; height: 28px; padding: 0; display: inline-grid; place-items: center; }
+
+.app { display: grid; grid-template-columns: 300px minmax(0, 1fr); height: calc(100vh - 49px); }
+aside { border-right: 1px solid var(--border); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.search { padding: 10px; border-bottom: 1px solid var(--border); }
+.search input {
+  width: 100%; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--page);
+}
+#tree { overflow: auto; flex: 1; padding: 4px 0 16px; }
+.trow {
+  display: flex; align-items: center; gap: 6px; padding: 2px 10px 2px 8px; cursor: pointer; white-space: nowrap;
+  border-left: 2px solid transparent; min-height: 24px;
+}
+.trow:hover { background: var(--hover); }
+.trow.sel { background: var(--accent-wash); border-left-color: var(--accent); }
+.trow.dim .tname { color: var(--muted); }
+.caret { width: 16px; height: 16px; border: 0; background: none; padding: 0; cursor: pointer; color: var(--muted); flex: none; line-height: 1; }
+.caret.sp { cursor: default; }
+.tname { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; }
+.ttype { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.tval { color: var(--text-2); font-variant-numeric: tabular-nums; font-size: 11.5px; }
+.sev { flex: none; display: inline-block; width: 10px; height: 10px; }
+
+main { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; min-width: 0; }
+.card h2 { font-size: 14px; margin: 0; font-weight: 620; }
+.card .sub { color: var(--text-2); margin: 2px 0 10px; }
+.card-head { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+.toolbar { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.field { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.field > label, .field > .lab { color: var(--text-2); }
+select { padding: 4px 6px; border-radius: 6px; border: 1px solid var(--border); background: var(--surface); }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 4px 10px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button[aria-pressed="true"] { background: var(--accent-wash); color: var(--text); font-weight: 600; }
+input[type=range] { width: 180px; accent-color: var(--accent); }
+.steplabel { min-width: 140px; font-variant-numeric: tabular-nums; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; color: var(--text-2); margin: 0 0 6px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+svg.chart { display: block; overflow: visible; }
+svg .grid { stroke: var(--grid); stroke-width: 1; }
+svg .axis { stroke: var(--axis); stroke-width: 1; }
+svg .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+svg .glabel { fill: var(--muted); font-size: 11px; font-family: var(--mono); }
+svg .atitle { fill: var(--muted); font-size: 11px; }
+svg .band { fill: var(--band); }
+svg .line { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; opacity: .55; }
+svg .sline { fill: none; stroke: var(--s1); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+svg .area { fill: var(--s1); opacity: .14; }
+svg .cross { stroke: var(--muted); stroke-width: 1; }
+svg .selline { stroke: var(--accent); stroke-width: 1.5; }
+svg .hit { fill: transparent; cursor: crosshair; }
+svg .bar { fill: var(--s1); }
+svg .bar.hl { fill: var(--s2); }
+svg .ref { stroke: var(--text-2); stroke-width: 1; }
+svg .reflabel { fill: var(--text-2); font-size: 11px; }
+
+.tip {
+  position: fixed; z-index: 50; pointer-events: none; display: none; max-width: 380px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; box-shadow: 0 6px 24px rgba(0,0,0,.18); font-size: 12px;
+}
+.tip b { font-family: var(--mono); font-weight: 600; }
+.tip table { border-collapse: collapse; margin-top: 4px; }
+.tip td { padding: 0 10px 0 0; font-variant-numeric: tabular-nums; }
+.tip td:first-child { color: var(--text-2); }
+.tip .warn { margin-top: 4px; }
+
+.crumbs { color: var(--muted); font-family: var(--mono); font-size: 12px; display: flex; flex-wrap: wrap; gap: 2px; }
+.crumbs a { color: var(--text-2); cursor: pointer; text-decoration: none; }
+.crumbs a:hover { text-decoration: underline; }
+.dtitle { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 2px; }
+.dtitle .path { font-family: var(--mono); font-size: 15px; font-weight: 620; word-break: break-all; }
+.typechip { display: inline-flex; align-items: center; gap: 6px; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); }
+.extra { font-family: var(--mono); font-size: 12px; color: var(--text-2); word-break: break-word; }
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.tab { border: 1px solid var(--border); border-radius: 6px; padding: 3px 10px; background: var(--surface); cursor: pointer; font-family: var(--mono); font-size: 12px; }
+.tab .muted { font-family: var(--sans); }
+.tab[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-wash); }
+.dgrid { display: grid; grid-template-columns: minmax(240px, 300px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.stats { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.stats td { padding: 3px 0; border-bottom: 1px solid var(--grid); }
+.stats td:first-child { color: var(--text-2); }
+.stats td:last-child { text-align: right; font-family: var(--mono); font-size: 12px; }
+.panel-title { display: flex; align-items: baseline; gap: 10px; margin: 18px 0 6px; flex-wrap: wrap; }
+.panel-title h3 { font-size: 13px; margin: 0; font-weight: 620; }
+.panel-title .cap { color: var(--text-2); }
+.panel-title .right { margin-left: auto; display: flex; gap: 10px; align-items: center; color: var(--text-2); }
+.hm-wrap { position: relative; }
+canvas { display: block; }
+.scalebar { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--text-2); font-variant-numeric: tabular-nums; flex-wrap: wrap; }
+.scalebar .grad { width: 180px; height: 10px; border-radius: 3px; }
+.nanchip { display: inline-flex; gap: 6px; align-items: center; }
+.nanchip i { width: 10px; height: 10px; background: var(--nan); display: inline-block; border-radius: 2px; }
+
+table.params { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+table.params th { text-align: left; font-weight: 500; color: var(--text-2); border-bottom: 1px solid var(--axis); padding: 4px 8px 4px 0; }
+table.params td { padding: 4px 8px 4px 0; border-bottom: 1px solid var(--grid); }
+table.params td.r, table.params th.r { text-align: right; }
+.scroll-x { overflow-x: auto; }
+
+.alist { max-height: 200px; overflow: auto; margin-top: 8px; border-top: 1px solid var(--grid); }
+.arow { display: grid; grid-template-columns: 16px 150px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 4px; border-bottom: 1px solid var(--grid); cursor: pointer; }
+.arow:hover { background: var(--hover); }
+.arow .p { font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.asum { display: flex; flex-wrap: wrap; gap: 8px; }
+.asum .chip { display: inline-flex; align-items: center; gap: 6px; }
+.ok { display: inline-flex; gap: 8px; align-items: center; color: var(--text-2); }
+.warnlist { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.warnlist div { display: flex; gap: 8px; align-items: center; }
+
+.empty { color: var(--text-2); padding: 18px 0; }
+.drop {
+  margin: 8vh auto; max-width: 620px; text-align: center; padding: 40px 24px; border: 2px dashed var(--axis); border-radius: 14px; background: var(--surface);
+}
+.drop h1 { font-size: 20px; margin: 0 0 6px; }
+.drop pre { text-align: left; background: var(--surface-2); padding: 12px; border-radius: 8px; overflow: auto; font-family: var(--mono); font-size: 12px; }
+body.dragging .drop, body.dragging main { outline: 2px solid var(--accent); outline-offset: -6px; }
+.err { background: var(--critical); color: #fff; padding: 8px 16px; }
+kbd { font-family: var(--mono); font-size: 11px; border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 4px; padding: 0 4px; background: var(--surface-2); }
+
+/* view tabs */
+.views { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.views button { border: 0; background: var(--surface); padding: 4px 12px; cursor: pointer; }
+.views button + button { border-left: 1px solid var(--border); }
+.views button[aria-pressed="true"] { background: var(--accent-wash); font-weight: 600; }
+.app.jepa-mode { grid-template-columns: minmax(0, 1fr); }
+.app.jepa-mode > aside, .app.jepa-mode > #main { display: none; }
+.app:not(.jepa-mode) > #jepa { display: none; }
+#jepa { overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+
+/* JEPA view */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.tile { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.tile .tl { color: var(--text-2); display: flex; align-items: center; gap: 8px; }
+.tile .tv { font-size: 22px; font-weight: 620; margin: 4px 0 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile .tv small { font-size: 13px; font-weight: 400; color: var(--text-2); }
+.tile .ts { color: var(--text-2); font-size: 12px; }
+.badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 1px 8px 1px 6px; border-radius: 999px; background: var(--surface-2); color: var(--text); white-space: nowrap; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin: 4px 0 12px; }
+.rolebtn { display: inline-flex; align-items: center; gap: 6px; }
+.land { display: grid; grid-template-columns: minmax(0, 1fr) 250px; gap: 18px; align-items: start; }
+.land table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+.land th { text-align: right; font-weight: 500; color: var(--text-2); padding: 3px 0 3px 6px; border-bottom: 1px solid var(--axis); }
+.land th:first-child, .land td:first-child { text-align: left; padding-left: 0; }
+.land td { text-align: right; padding: 4px 0 4px 6px; border-bottom: 1px solid var(--grid); }
+.note { color: var(--text-2); font-size: 12px; margin-top: 8px; }
+.multiples { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+.multiples h4 { margin: 0 0 4px; font-size: 12.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.multiples .cap { color: var(--text-2); font-size: 12px; }
+table.health { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+table.health th { text-align: right; font-weight: 500; color: var(--text-2); padding: 4px 0 4px 10px; border-bottom: 1px solid var(--axis); white-space: nowrap; }
+table.health td { text-align: right; padding: 4px 0 4px 10px; border-bottom: 1px solid var(--grid); }
+table.health th:first-child, table.health td:first-child { text-align: left; padding-left: 0; color: var(--text-2); }
+.two { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.bars { display: flex; flex-direction: column; gap: 2px; }
+.brow { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr) 72px; gap: 10px; align-items: center; padding: 2px 4px; border-radius: 6px; cursor: pointer; }
+.brow:hover { background: var(--hover); }
+.brow .bl { font-family: var(--mono); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.brow .bv { text-align: right; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: 12px; }
+.track { position: relative; height: 14px; }
+.track .fill { position: absolute; top: 0; height: 14px; }
+.track .zero { position: absolute; top: -2px; bottom: -2px; width: 1px; background: var(--axis); }
+.role-tag { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: none; }
+
+@media (max-width: 860px) {
+  .land, .two { grid-template-columns: minmax(0, 1fr); }
+  .app { grid-template-columns: minmax(0, 1fr); height: auto; }
+  header { gap: 8px 12px; }
+  .toolbar { gap: 10px 14px; }
+  aside { max-height: 42vh; border-right: 0; border-bottom: 1px solid var(--border); }
+  main { overflow: visible; }
+  .dgrid { grid-template-columns: 1fr; }
+  input[type=range] { width: 120px; }
+  .arow { grid-template-columns: 16px minmax(0, 1fr) auto; }
+  .arow .lbl { display: none; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true"><path d="M1 10h3l2-6 4 12 3-9 2 3h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    sigtrace
+  </div>
+  <span class="model" id="model-name"></span>
+  <nav class="views" id="views" aria-label="View" hidden></nav>
+  <div class="chips" id="meta"></div>
+  <div class="spacer"></div>
+  <label class="btn" title="Open a trace .json or .json.gz">Open trace…<input id="file" type="file" accept=".json,.gz,application/json" hidden></label>
+  <button class="btn icon-btn" id="theme" title="Toggle light / dark" aria-label="Toggle light or dark theme">
+    <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg>
+  </button>
+</header>
+<div id="root"></div>
+<div class="tip" id="tip"></div>
+
+<script id="sigtrace-data" type="application/json">/*__SIGTRACE_DATA__*/null</script>
+<script>
+(() => {
+'use strict';
+
+/* ------------------------------------------------------------------ DOM helpers */
+const $ = (sel, root = document) => root.querySelector(sel);
+const NS = 'http://www.w3.org/2000/svg';
+function setAttrs(el, attrs) {
+  if (!attrs) return;
+  for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
+    if (k === 'style' && typeof v === 'object') { for (const [sk, sv] of Object.entries(v)) el.style.setProperty(sk, sv); }
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2), v);
+    else if (k === 'text') el.textContent = v;
+    else if (k === 'html') el.innerHTML = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+}
+function append(el, kids) {
+  for (const k of kids.flat(Infinity)) {
+    if (k == null || k === false) continue;
+    el.append(k instanceof Node ? k : document.createTextNode(String(k)));
+  }
+}
+function h(tag, attrs, ...kids) { const el = document.createElement(tag); setAttrs(el, attrs); append(el, kids); return el; }
+function s(tag, attrs, ...kids) { const el = document.createElementNS(NS, tag); setAttrs(el, attrs); append(el, kids); return el; }
+const esc = (x) => String(x).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const cssVar = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch { /* storage unavailable */ } },
+};
+
+/* ------------------------------------------------------------------ formatting */
+const minus = (t) => t.replace(/-/g, '−');
+function fmt(v, sig = 4) {
+  if (v == null || Number.isNaN(v)) return '—';
+  if (!Number.isFinite(v)) return v > 0 ? '∞' : '−∞';
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1e5 || a < 1e-3) return minus(v.toExponential(Math.max(0, sig - 2)).replace('e+', 'e'));
+  return minus(Number(v.toPrecision(sig)).toLocaleString('en-US', { maximumSignificantDigits: sig }));
+}
+const fmtShort = (v) => fmt(v, 3);
+function fmtCount(n) {
+  if (n == null) return '—';
+  const a = Math.abs(n);
+  if (a >= 1e9) return (n / 1e9).toFixed(a >= 1e10 ? 0 : 1) + 'B';
+  if (a >= 1e6) return (n / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+  if (a >= 1e4) return (n / 1e3).toFixed(a >= 1e5 ? 0 : 1) + 'K';
+  return n.toLocaleString('en-US');
+}
+const fmtPct = (v) => (v == null ? '—' : (v * 100).toFixed(v > 0 && v < 0.001 ? 3 : 1) + '%');
+const fmtShape = (sh) => (sh && sh.length ? sh.join('×') : 'scalar');
+
+/* ------------------------------------------------------------------ scales */
+function niceTicks(a, b, n = 5) {
+  const span = b - a;
+  if (!(span > 0)) return [a];
+  const step0 = span / n, mag = 10 ** Math.floor(Math.log10(step0)), r = step0 / mag;
+  const step = (r < 1.5 ? 1 : r < 3 ? 2 : r < 7 ? 5 : 10) * mag;
+  const out = [];
+  for (let v = Math.ceil(a / step) * step; v <= b + step * 1e-9; v += step) out.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toPrecision(12));
+  return out;
+}
+function scaleLinear(d0, d1, r0, r1) {
+  if (!(d1 > d0)) { d0 -= 1; d1 += 1; }
+  const f = (v) => r0 + ((v - d0) / (d1 - d0)) * (r1 - r0);
+  f.valid = (v) => v != null && Number.isFinite(v);
+  f.ticks = () => niceTicks(d0, d1, 4);
+  f.domain = [d0, d1];
+  f.norm = (v) => (v - d0) / (d1 - d0);
+  f.kind = 'linear';
+  return f;
+}
+function scaleLog(d0, d1, r0, r1) {
+  let l0 = Math.log10(d0), l1 = Math.log10(d1);
+  if (!(l1 - l0 > 1e-9)) { l0 -= 0.5; l1 += 0.5; }
+  const f = (v) => r0 + ((Math.log10(v) - l0) / (l1 - l0)) * (r1 - r0);
+  f.valid = (v) => v != null && v > 0 && Number.isFinite(v);
+  f.norm = (v) => (Math.log10(v) - l0) / (l1 - l0);
+  f.ticks = () => {
+    const span = l1 - l0, out = [];
+    if (span >= 2) {
+      const step = Math.max(1, Math.ceil(span / 5));
+      for (let e = Math.ceil(l0); e <= Math.floor(l1); e += step) out.push(10 ** e);
+    } else {
+      for (let e = Math.floor(l0); e <= Math.ceil(l1); e++)
+        for (const m of span < 0.6 ? [1, 1.5, 2, 3, 5, 7] : [1, 2, 5]) {
+          const v = +(m * 10 ** e).toPrecision(6), lv = Math.log10(v);
+          if (lv >= l0 - 1e-9 && lv <= l1 + 1e-9) out.push(v);
+        }
+    }
+    return out;
+  };
+  f.domain = [10 ** l0, 10 ** l1];
+  f.kind = 'log';
+  return f;
+}
+function scaleSymlog(d0, d1, r0, r1, C) {
+  const tf = (v) => Math.sign(v) * Math.log10(1 + Math.abs(v) / C);
+  let t0 = tf(d0), t1 = tf(d1);
+  if (!(t1 > t0)) { t0 -= 0.5; t1 += 0.5; }
+  const f = (v) => r0 + ((tf(v) - t0) / (t1 - t0)) * (r1 - r0);
+  f.valid = (v) => v != null && Number.isFinite(v);
+  f.norm = (v) => (tf(v) - t0) / (t1 - t0);
+  f.ticks = () => {
+    const amax = Math.max(Math.abs(d0), Math.abs(d1));
+    const eHi = Math.floor(Math.log10(amax)), eLo = Math.ceil(Math.log10(C * 3));
+    const n = Math.max(0, eHi - eLo + 1), step = Math.max(1, Math.ceil(n / 3));
+    const out = [];
+    if (d0 <= 0 && d1 >= 0) out.push(0);
+    for (let e = eHi; e >= eLo; e -= step) {
+      const v = 10 ** e;
+      if (v <= d1) out.push(v);
+      if (-v >= d0) out.push(-v);
+    }
+    return out.sort((a, b) => a - b);
+  };
+  f.domain = [d0, d1];
+  f.kind = 'symlog';
+  return f;
+}
+function fmtTick(v) {
+  if (v === 0) return '0';
+  const a = Math.abs(v);
+  if (a >= 1e4 || a < 1e-2) {
+    const e = Math.round(Math.log10(a));
+    if (Math.abs(a - 10 ** e) / a < 1e-6) return (v < 0 ? '−' : '') + '1e' + minus(String(e));
+    return minus(v.toExponential(0).replace('e+', 'e'));
+  }
+  return fmt(v, 3);
+}
+
+/* ------------------------------------------------------------------ metrics */
+const isNumT = (t) => t && t.rms != null;
+function firstTensor(arr) {
+  if (!arr || !arr.length) return null;
+  return arr.find((t) => (t.kind === 'float' || t.kind === 'complex') && isNumT(t)) || arr.find(isNumT) || null;
+}
+const primary = (ev, role) => (ev ? firstTensor(role === 'in' ? ev.inputs : ev.outputs) : null);
+const absmax = (t) => (t.min == null ? null : Math.max(Math.abs(t.min), Math.abs(t.max)));
+const outlierRatio = (t) => (t.channels && t.channels.median > 0 && t.channels.top.length ? t.channels.top[0][1] / t.channels.median : null);
+function gainOf(ev) {
+  const i = primary(ev, 'in'), o = primary(ev, 'out');
+  if (!i || !o || i.kind !== 'float' || o.kind !== 'float' || !(i.rms > 0) || o.rms == null) return null;
+  return o.rms / i.rms;
+}
+
+const METRICS = {
+  rms: { label: 'RMS', desc: 'root-mean-square', scale: 'log', t: (t) => t.rms },
+  std: { label: 'Std dev', desc: 'standard deviation', scale: 'log', t: (t) => t.std },
+  abs_mean: { label: 'Mean |x|', desc: 'mean absolute value', scale: 'log', t: (t) => t.abs_mean },
+  absmax: { label: 'Max |x|', desc: 'largest absolute value', scale: 'log', t: absmax },
+  range: { label: 'Value range', desc: 'p1–p99 band, mean line', scale: 'symlog', t: (t) => t.mean, range: true },
+  mean: { label: 'Mean', desc: 'mean', scale: 'symlog', t: (t) => t.mean },
+  zero_frac: { label: 'Zero fraction', desc: 'fraction of exact zeros', scale: 'linear', t: (t) => t.zero_frac, pct: true, domain: [0, 1] },
+  outlier: { label: 'Outlier channel ratio', desc: 'max ÷ median per-channel mean |x|', scale: 'log', t: outlierRatio },
+  gain: { label: 'Gain', desc: 'output RMS ÷ input RMS', scale: 'log', ev: gainOf, noRole: true },
+  nonfinite: { label: 'NaN + Inf', desc: 'count of non-finite values', scale: 'linear',
+    ev: (ev, role) => (role === 'in' ? ev.inputs : ev.outputs || []).reduce((a, t) => a + (t.nan || 0) + (t.inf || 0), 0) },
+  ms: { label: 'Time (ms)', desc: 'wall-clock time excluding tracer overhead', scale: 'log', ev: (ev) => ev.ms, noRole: true },
+  abl_loss: { label: 'JEPA: ablation Δloss', desc: 'relative change of the JEPA loss when this module’s output is replaced by its batch mean',
+    scale: 'symlog', pct: false, jepa: true, noRole: true, ev: (ev) => infl(ev.module, 'd_loss') },
+  abl_drift: { label: 'JEPA: prediction drift', desc: 'how far predictions move when this module is mean-ablated (1 = sample information destroyed)',
+    scale: 'linear', jepa: true, noRole: true, ev: (ev) => infl(ev.module, 'pred_drift') },
+  attr: { label: 'JEPA: gradient × activation', desc: 'Σ |∂loss/∂output · output|', scale: 'log', jepa: true, noRole: true, ev: (ev) => infl(ev.module, 'attr') },
+};
+const infl = (mid, key) => { const r = D && D.influence && D.influence.get(mid); return r && r[key] != null ? r[key] : null; };
+function metricValue(ev, key = state.metric, role = state.role) {
+  if (!ev) return null;
+  const m = METRICS[key];
+  if (m.ev) return m.ev(ev, role);
+  const t = primary(ev, role);
+  return t ? m.t(t) : null;
+}
+
+/* ------------------------------------------------------------------ anomalies */
+const SEV = { critical: 3, serious: 2, warning: 1 };
+const SEV_LABEL = { critical: 'Critical', serious: 'Serious', warning: 'Warning', good: 'OK' };
+function sevIcon(sev, size = 10) {
+  const c = `var(--${sev})`;
+  if (sev === 'good') {
+    return s('svg', { width: size, height: size, viewBox: '0 0 10 10', class: 'sev', role: 'img', 'aria-label': 'OK' }, s('title', {}, 'OK'),
+      s('circle', { cx: 5, cy: 5, r: 4.8, style: { fill: c } }),
+      s('path', { d: 'M2.8 5.2l1.5 1.5 3-3.2', fill: 'none', stroke: '#fff', 'stroke-width': 1.3, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  }
+  const shape = sev === 'critical'
+    ? s('circle', { cx: 5, cy: 5, r: 4.5, style: { fill: c } })
+    : sev === 'serious'
+      ? s('path', { d: 'M5 0.5 L9.6 9.3 L0.4 9.3 Z', style: { fill: c } })
+      : s('path', { d: 'M5 0.3 L9.7 5 L5 9.7 L0.3 5 Z', style: { fill: c } });
+  return s('svg', { width: size, height: size, viewBox: '0 0 10 10', class: 'sev', role: 'img', 'aria-label': SEV_LABEL[sev] }, s('title', {}, SEV_LABEL[sev]), shape);
+}
+function detect(ev, mod) {
+  const out = [];
+  for (const t of ev.outputs || []) {
+    if (t.nan || t.inf) out.push({ sev: 'critical', label: 'Non-finite values', detail: `${t.nan || 0} NaN, ${t.inf || 0} Inf in ${t.name}` });
+  }
+  const t = primary(ev, 'out');
+  if (t && t.kind === 'float') {
+    const am = absmax(t);
+    if (am != null && am > 1e4) out.push({ sev: 'serious', label: 'Exploding values', detail: `max |x| = ${fmt(am)}` });
+    if (t.numel >= 16 && t.zero_frac > 0.95) out.push({ sev: 'warning', label: 'Mostly zeros', detail: `${fmtPct(t.zero_frac)} exact zeros` });
+    if (t.numel >= 16 && t.std === 0) out.push({ sev: 'warning', label: 'Constant output', detail: `all values = ${fmt(t.mean)}` });
+    const r = outlierRatio(t);
+    if (r != null && r >= 20 && t.channels.n >= 8)
+      out.push({ sev: 'warning', label: 'Outlier channel', detail: `channel ${t.channels.top[0][0]} is ${fmt(r, 3)}× the median` });
+  }
+  const g = gainOf(ev);
+  if (g != null && mod.type !== 'Dropout') {
+    if (g > 100) out.push({ sev: 'serious', label: 'Large gain', detail: `output RMS is ${fmt(g, 3)}× input` });
+    else if (g < 0.01) out.push({ sev: 'warning', label: 'Signal collapse', detail: `output RMS is ${fmt(g, 3)}× input` });
+  }
+  return out;
+}
+const worst = (list) => list.reduce((w, a) => (!w || SEV[a.sev] > SEV[w] ? a.sev : w), null);
+
+/* ------------------------------------------------------------------ data */
+let D = null;
+const state = {
+  step: 0, metric: 'rms', role: 'out', scope: 'leaf', log: true,
+  sel: null, tensor: null, histLog: false, search: '', expanded: new Set(), playing: null, aScope: 'step',
+  view: 'signals',
+  // JEPA view
+  lx: 0, ly: 1, lroles: new Set(['context', 'target', 'prediction']), lh: 'all', ellipses: true, density: true, vectors: false, lcolor: 'role', lscale: 'norm',
+  imetric: 'd_loss', igroup: 'all', ileaf: true, pmetric: 'r2',
+};
+
+function prepare(T) {
+  if (!T || T.format !== 'sigtrace') throw new Error('Not a sigtrace trace file (missing "format": "sigtrace").');
+  const mods = T.modules;
+  mods.forEach((m) => { m.children = []; });
+  mods.forEach((m) => { if (m.parent != null) mods[m.parent].children.push(m.id); });
+  const steps = T.steps && T.steps.length ? T.steps : [{ index: 0, label: 'step 0' }];
+  const byStep = steps.map(() => new Map());
+  const byStepModule = steps.map(() => new Map());
+  const slots = [], slotPos = new Map();
+  // Merge per-step call orders into one stable slot order.
+  const evByStep = steps.map(() => []);
+  for (const ev of T.events) if (evByStep[ev.step]) evByStep[ev.step].push(ev);
+  for (let si = 0; si < steps.length; si++) {
+    let prev = -1;
+    for (const ev of evByStep[si].sort((a, b) => a.order - b.order)) {
+      const key = ev.module + ':' + ev.call;
+      if (!slotPos.has(key)) {
+        slots.splice(prev + 1, 0, { key, module: ev.module, call: ev.call });
+        slots.forEach((sl, i) => slotPos.set(sl.key, i));
+      }
+      prev = slotPos.get(key);
+      byStep[si].set(key, ev);
+      const lst = byStepModule[si].get(ev.module) || [];
+      lst.push(ev);
+      byStepModule[si].set(ev.module, lst);
+      ev.anomalies = detect(ev, mods[ev.module]);
+    }
+  }
+  // Colour module types by frequency (stable across scopes): 7 slots + Other.
+  const typeCount = new Map();
+  for (const ev of T.events) if (ev.module !== 0) { const ty = mods[ev.module].type; typeCount.set(ty, (typeCount.get(ty) || 0) + 1); }
+  const types = [...typeCount.entries()].sort((a, b) => b[1] - a[1]).map((x) => x[0]);
+  const typeColor = new Map(types.slice(0, 7).map((ty, i) => [ty, `var(--s${i + 1})`]));
+  const maxDepth = Math.max(0, ...T.events.map((e) => mods[e.module].depth));
+  const anomalies = [];
+  for (const ev of T.events) for (const a of ev.anomalies || []) anomalies.push({ ...a, ev });
+  anomalies.sort((a, b) => SEV[b.sev] - SEV[a.sev] || a.ev.step - b.ev.step || a.ev.order - b.ev.order);
+  const jepa = T.jepa || null;
+  const influence = new Map();
+  if (jepa && jepa.influence) for (const r of jepa.influence.modules || []) influence.set(r.module, r);
+  return { T, meta: T.meta || {}, mods, steps, byStep, byStepModule, slots, types, typeColor, maxDepth, anomalies, jepa, influence };
+}
+const typeColor = (ty) => D.typeColor.get(ty) || 'var(--other)';
+const modOf = (ev) => D.mods[ev.module];
+
+function scopeOptions() {
+  const opts = [['leaf', 'Leaf modules'], ['all', 'All modules']];
+  for (let d = 1; d <= D.maxDepth; d++) opts.push(['d' + d, `Depth ${d} only`]);
+  return opts;
+}
+function inScope(sl) {
+  const m = D.mods[sl.module];
+  if (state.scope === 'all') return true;
+  if (state.scope === 'leaf') return m.leaf || (m.id === 0 && D.mods.length === 1);
+  return m.depth === +state.scope.slice(1);
+}
+const visibleSlots = () => D.slots.filter(inScope);
+
+function yScaleFor(values, mkey, r0, r1) {
+  const m = METRICS[mkey];
+  let kind = m.scale;
+  if (kind === 'log' && !state.log) kind = 'linear';
+  const vals = values.filter((v) => v != null && Number.isFinite(v));
+  if (m.domain) return scaleLinear(m.domain[0], m.domain[1], r0, r1);
+  if (kind === 'log') {
+    const pos = vals.filter((v) => v > 0);
+    if (!pos.length) return scaleLog(0.1, 10, r0, r1);
+    let lo = Math.min(...pos), hi = Math.max(...pos);
+    const pad = Math.max(0.15, (Math.log10(hi) - Math.log10(lo)) * 0.06);
+    return scaleLog(lo / 10 ** pad, hi * 10 ** pad, r0, r1);
+  }
+  if (!vals.length) return scaleLinear(0, 1, r0, r1);
+  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  if (kind === 'symlog') {
+    const nz = vals.map(Math.abs).filter((v) => v > 0).sort((a, b) => a - b);
+    const C = nz.length ? Math.max(nz[Math.floor(nz.length / 2)] / 4, 1e-12) : 1;
+    const amax = Math.max(Math.abs(lo), Math.abs(hi)) * 1.15;
+    return scaleSymlog(lo < 0 ? -amax : 0, hi > 0 ? amax : 0, r0, r1, C);
+  }
+  const pad = (hi - lo) * 0.06 || 1;
+  return scaleLinear(lo < 0 ? lo - pad : 0, hi + pad, r0, r1);
+}
+function valuesAcrossSteps(slotsList, mkey) {
+  const m = METRICS[mkey], all = [];
+  for (const sl of slotsList) for (let si = 0; si < D.steps.length; si++) {
+    const ev = D.byStep[si].get(sl.key);
+    if (!ev) continue;
+    if (m.range) { const t = primary(ev, state.role); if (t && t.q) all.push(t.q[0], t.q[4], t.mean); }
+    else all.push(metricValue(ev, mkey));
+  }
+  return all;
+}
+
+/* ------------------------------------------------------------------ tooltip */
+const tip = $('#tip');
+function showTip(html, x, y) {
+  tip.innerHTML = html;
+  tip.style.display = 'block';
+  const r = tip.getBoundingClientRect();
+  let left = x + 14, top = y + 14;
+  if (left + r.width > innerWidth - 8) left = Math.max(8, x - r.width - 14);
+  if (top + r.height > innerHeight - 8) top = Math.max(8, y - r.height - 14);
+  tip.style.left = left + 'px';
+  tip.style.top = top + 'px';
+}
+const hideTip = () => { tip.style.display = 'none'; };
+function evTipHtml(ev, extraRows = []) {
+  const m = modOf(ev), t = primary(ev, state.role), met = METRICS[state.metric];
+  const rows = [];
+  if (met.range && t) rows.push(['p1 … p99', `${fmt(t.q && t.q[0])} … ${fmt(t.q && t.q[4])}`], ['mean', fmt(t.mean)], ['min … max', `${fmt(t.min)} … ${fmt(t.max)}`]);
+  else { const v = metricValue(ev); rows.push([met.label, met.pct ? fmtPct(v) : fmt(v)]); }
+  if (t) rows.push(['shape', fmtShape(t.shape)]);
+  rows.push(...extraRows);
+  const warn = (ev.anomalies || []).map((a) => `<div class="warn">${sevIcon(a.sev).outerHTML} ${esc(a.label)}: ${esc(a.detail)}</div>`).join('');
+  return `<b>${esc(m.path || m.name)}</b>${ev.call ? ` <span class="muted">call ${ev.call + 1}</span>` : ''}<div class="muted">${esc(m.type)}</div>`
+    + `<table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>${warn}`;
+}
+
+/* ------------------------------------------------------------------ layout */
+function buildApp() {
+  const root = $('#root');
+  root.innerHTML = '';
+  const metricSel = h('select', { id: 'metric', 'aria-label': 'Metric', onchange: (e) => { state.metric = e.target.value; renderAll(); } },
+    Object.entries(METRICS).filter(([, m]) => !m.jepa || (D.jepa && D.jepa.influence)).map(([k, m]) => h('option', { value: k }, m.label)));
+  const scopeSel = h('select', { id: 'scope', 'aria-label': 'Modules shown', onchange: (e) => { state.scope = e.target.value; renderAll(); } },
+    scopeOptions().map(([k, l]) => h('option', { value: k }, l)));
+  const multi = D.steps.length > 1;
+  const slider = h('input', { type: 'range', id: 'step', min: 0, max: D.steps.length - 1, value: state.step, 'aria-label': 'Step',
+    oninput: (e) => setStep(+e.target.value) });
+
+  root.append(h('div', { class: 'app' + (D.jepa && state.view === 'jepa' ? ' jepa-mode' : ''), id: 'app' },
+    D.jepa && h('main', { id: 'jepa' }),
+    h('aside', {},
+      h('div', { class: 'search' }, h('input', { type: 'search', placeholder: 'Filter modules by name or type', 'aria-label': 'Filter modules',
+        oninput: (e) => { state.search = e.target.value; renderTree(); } })),
+      h('div', { id: 'tree', role: 'tree' })),
+    h('main', { id: 'main' },
+      h('div', { class: 'card toolbar' },
+        multi && h('div', { class: 'field' },
+          h('span', { class: 'lab' }, 'Step'),
+          h('button', { class: 'btn icon-btn', title: 'Previous step (←)', 'aria-label': 'Previous step', onclick: () => setStep(state.step - 1) }, '‹'),
+          slider,
+          h('button', { class: 'btn icon-btn', title: 'Next step (→)', 'aria-label': 'Next step', onclick: () => setStep(state.step + 1) }, '›'),
+          h('button', { class: 'btn icon-btn', id: 'play', title: 'Play through steps', 'aria-label': 'Play', onclick: togglePlay }, '▶'),
+          h('span', { class: 'steplabel', id: 'steplabel' })),
+        h('div', { class: 'field' }, h('label', { for: 'metric' }, 'Metric'), metricSel),
+        h('div', { class: 'field', id: 'rolefield' }, h('span', { class: 'lab' }, 'Tensor'),
+          h('div', { class: 'seg', id: 'role' },
+            h('button', { 'data-v': 'out', onclick: () => { state.role = 'out'; renderAll(); } }, 'Output'),
+            h('button', { 'data-v': 'in', onclick: () => { state.role = 'in'; renderAll(); } }, 'Input'))),
+        h('div', { class: 'field' }, h('label', { for: 'scope' }, 'Show'), scopeSel),
+        h('label', { class: 'field', id: 'logfield' }, h('input', { type: 'checkbox', id: 'log', checked: state.log, onchange: (e) => { state.log = e.target.checked; renderAll(); } }), 'Log scale')),
+      h('section', { class: 'card', id: 'anom' }),
+      h('section', { class: 'card' },
+        h('div', { class: 'card-head' }, h('h2', {}, 'Signal flow'), h('span', { class: 'sec', id: 'flow-sub' })),
+        h('div', { class: 'legend', id: 'flow-legend' }),
+        h('div', { id: 'flow' })),
+      multi && h('section', { class: 'card' },
+        h('div', { class: 'card-head' }, h('h2', {}, 'Across steps'), h('span', { class: 'sec', id: 'matrix-sub' })),
+        h('div', { id: 'matrix', class: 'hm-wrap' }),
+        h('div', { id: 'matrix-scale' })),
+      h('section', { class: 'card', id: 'details' }),
+      h('div', { class: 'muted', style: { 'text-align': 'center', 'padding-bottom': '8px' } },
+        'Keys: ', h('kbd', {}, '←'), ' ', h('kbd', {}, '→'), ' step · ', h('kbd', {}, '↑'), ' ', h('kbd', {}, '↓'), ' previous / next module · ', h('kbd', {}, 'Space'), ' play'))));
+
+  $('#metric').value = state.metric;
+  $('#scope').value = state.scope;
+  const nav = $('#views');
+  nav.innerHTML = '';
+  nav.hidden = !D.jepa;
+  if (D.jepa) {
+    for (const [v, label] of [['jepa', 'JEPA'], ['signals', 'Signals']]) {
+      nav.append(h('button', { 'data-v': v, onclick: () => setView(v) }, label));
+    }
+  }
+  let lastW = root.clientWidth;
+  new ResizeObserver(debounce(() => {
+    if (root.clientWidth === lastW) return; // react to width only: content height changes on every render
+    lastW = root.clientWidth;
+    if (state.view === 'jepa') renderJepa();
+  }, 80)).observe(root);
+  if (!state.sel) {
+    const vis = visibleSlots();
+    const firstBad = D.anomalies.find((a) => inScope({ module: a.ev.module }));
+    const sl = firstBad ? { module: firstBad.ev.module, call: firstBad.ev.call } : vis.length ? vis[0] : { module: 0, call: 0 };
+    state.sel = { module: sl.module, call: sl.call };
+    expandTo(sl.module);
+  }
+  for (const m of D.mods) if (m.depth < 1) state.expanded.add(m.id);
+  new ResizeObserver(debounce(() => renderCharts(), 80)).observe($('#main'));
+  renderAll();
+}
+function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
+
+function renderHeader() {
+  const meta = D.meta;
+  $('#model-name').textContent = meta.name || meta.model_type || '';
+  const chips = [
+    meta.n_params != null && `${fmtCount(meta.n_params)} params`,
+    `${D.mods.length} modules`,
+    `${fmtCount(D.T.events.length)} calls`,
+    D.steps.length > 1 && `${D.steps.length} steps`,
+    meta.param_dtype && `${meta.param_dtype} · ${meta.device}`,
+    meta.torch && `torch ${meta.torch}`,
+    meta.created && meta.created.replace('T', ' ').slice(0, 16),
+  ].filter(Boolean);
+  const host = $('#meta');
+  host.innerHTML = '';
+  chips.forEach((c) => host.append(h('span', { class: 'chip' }, c)));
+  document.title = meta.name ? `${meta.name} · Sigtrace Viewer` : 'Sigtrace Viewer';
+}
+
+function renderToolbar() {
+  const multi = D.steps.length > 1;
+  if (multi) {
+    $('#step').value = state.step;
+    const st = D.steps[state.step];
+    $('#steplabel').textContent = `${st.label} · ${state.step + 1}/${D.steps.length}`;
+    $('#play').textContent = state.playing ? '❚❚' : '▶';
+    $('#play').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
+  }
+  const m = METRICS[state.metric];
+  $('#rolefield').style.display = m.noRole ? 'none' : '';
+  for (const b of $('#role').children) b.setAttribute('aria-pressed', String(b.dataset.v === state.role));
+  $('#logfield').style.display = m.scale === 'log' ? '' : 'none';
+}
+
+function setView(v) {
+  state.view = v;
+  hideTip();
+  $('#app').classList.toggle('jepa-mode', v === 'jepa');
+  renderAll();
+}
+function renderAll() {
+  renderHeader();
+  for (const b of $('#views').children) b.setAttribute('aria-pressed', String(b.dataset.v === state.view));
+  if (D.jepa && state.view === 'jepa') { renderJepa(); return; }
+  renderToolbar();
+  renderTree();
+  renderAnomalies();
+  renderCharts();
+}
+function renderCharts() {
+  if (!D || (D.jepa && state.view === 'jepa')) return;
+  renderFlow();
+  renderMatrix();
+  renderDetails();
+}
+
+/* ------------------------------------------------------------------ interaction */
+function setStep(i) {
+  const n = D.steps.length;
+  state.step = ((i % n) + n) % n;
+  renderAll();
+}
+function togglePlay() {
+  if (state.playing) { clearInterval(state.playing); state.playing = null; }
+  else state.playing = setInterval(() => setStep(state.step + 1), 700);
+  renderToolbar();
+}
+function expandTo(mid) {
+  let m = D.mods[mid];
+  while (m && m.parent != null) { state.expanded.add(m.parent); m = D.mods[m.parent]; }
+}
+function select(module, call = 0, opts = {}) {
+  state.sel = { module, call };
+  expandTo(module);
+  renderAll();
+  if (opts.scrollTree !== false) {
+    const row = $(`#tree [data-id="${module}"]`);
+    if (row) row.scrollIntoView({ block: 'nearest' });
+  }
+}
+function moveSel(delta) {
+  const vis = visibleSlots();
+  if (!vis.length) return;
+  let i = vis.findIndex((sl) => sl.module === state.sel?.module && sl.call === state.sel?.call);
+  i = i < 0 ? 0 : Math.max(0, Math.min(vis.length - 1, i + delta));
+  select(vis[i].module, vis[i].call);
+}
+document.addEventListener('keydown', (e) => {
+  if (!D || state.view === 'jepa' || e.target.closest('input, select, textarea') || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'ArrowRight' && D.steps.length > 1) { setStep(state.step + 1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' && D.steps.length > 1) { setStep(state.step - 1); e.preventDefault(); }
+  else if (e.key === 'ArrowDown') { moveSel(1); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { moveSel(-1); e.preventDefault(); }
+  else if (e.key === ' ' && D.steps.length > 1 && !e.target.closest('button')) { togglePlay(); e.preventDefault(); }
+});
+
+/* ------------------------------------------------------------------ module tree */
+function renderTree() {
+  const list = $('#tree');
+  const scroll = list.scrollTop;
+  list.innerHTML = '';
+  const q = state.search.trim().toLowerCase();
+  let match = null;
+  if (q) {
+    match = new Set();
+    for (const m of D.mods) {
+      if ((m.path || m.name).toLowerCase().includes(q) || m.type.toLowerCase().includes(q)) {
+        for (let x = m; x; x = x.parent != null ? D.mods[x.parent] : null) match.add(x.id);
+      }
+    }
+  }
+  const frag = document.createDocumentFragment();
+  const stepMods = D.byStepModule[state.step];
+  const walk = (m, lvl) => {
+    if (match && !match.has(m.id)) return;
+    const open = match ? true : state.expanded.has(m.id);
+    const evs = stepMods.get(m.id) || [];
+    const v = evs.length ? metricValue(evs[0]) : null;
+    const sev = worst(evs.flatMap((e) => e.anomalies));
+    const sel = state.sel && state.sel.module === m.id;
+    frag.append(h('div', {
+      class: 'trow' + (sel ? ' sel' : '') + (m.traced ? '' : ' dim'), 'data-id': m.id, role: 'treeitem',
+      'aria-selected': String(!!sel), 'aria-expanded': m.children.length ? String(open) : null,
+      style: { 'padding-left': 8 + lvl * 14 + 'px' }, title: (m.path || m.name) + (m.traced ? '' : ' (not traced)'),
+      onclick: () => select(m.id, 0, { scrollTree: false }),
+    },
+    m.children.length
+      ? h('button', { class: 'caret', 'aria-label': open ? 'Collapse' : 'Expand', onclick: (e) => { e.stopPropagation(); if (open) state.expanded.delete(m.id); else state.expanded.add(m.id); renderTree(); } }, open ? '▾' : '▸')
+      : h('span', { class: 'caret sp' }),
+    h('span', { class: 'tname' }, m.name),
+    m.role && (m.parent == null || D.mods[m.parent].role !== m.role) && h('span', { class: 'role-tag', title: roleName(m.role), style: { background: roleColor(m.role) } }),
+    h('span', { class: 'ttype' }, m.type),
+    sev && sevIcon(sev),
+    h('span', { class: 'tval' }, v == null ? '' : METRICS[state.metric].pct ? fmtPct(v) : fmtShort(v))));
+    if (open) for (const c of m.children) walk(D.mods[c], lvl + 1);
+  };
+  walk(D.mods[0], 0);
+  list.append(frag);
+  list.scrollTop = scroll;
+}
+
+/* ------------------------------------------------------------------ anomalies card */
+function renderAnomalies() {
+  const host = $('#anom');
+  host.innerHTML = '';
+  const list = state.aScope === 'step' ? D.anomalies.filter((a) => a.ev.step === state.step) : D.anomalies;
+  const multi = D.steps.length > 1;
+  host.append(h('div', { class: 'card-head' },
+    h('h2', {}, 'Anomalies'),
+    h('span', { class: 'sec' }, list.length ? `${list.length} flagged in ${state.aScope === 'step' && multi ? 'this step' : 'the trace'}` : ''),
+    multi && h('div', { class: 'seg', style: { 'margin-left': 'auto' } },
+      h('button', { 'aria-pressed': String(state.aScope === 'step'), onclick: () => { state.aScope = 'step'; renderAnomalies(); } }, 'This step'),
+      h('button', { 'aria-pressed': String(state.aScope === 'all'), onclick: () => { state.aScope = 'all'; renderAnomalies(); } }, 'All steps'))));
+  if (!list.length) {
+    host.append(h('div', { class: 'ok', style: { 'margin-top': '8px' } },
+      s('svg', { width: 14, height: 14, viewBox: '0 0 14 14', 'aria-hidden': 'true' }, s('circle', { cx: 7, cy: 7, r: 6.5, style: { fill: 'var(--good)' } }), s('path', { d: 'M4 7.2l2 2 4-4.4', fill: 'none', stroke: '#fff', 'stroke-width': 1.6, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' })),
+      'No NaN/Inf, exploding values, dead outputs, outlier channels or extreme gains detected.'));
+    return;
+  }
+  const counts = new Map();
+  for (const a of list) { const k = a.sev + '|' + a.label; counts.set(k, (counts.get(k) || 0) + 1); }
+  host.append(h('div', { class: 'asum', style: { 'margin-top': '8px' } },
+    [...counts.entries()].map(([k, n]) => { const [sev, label] = k.split('|'); return h('span', { class: 'chip' }, sevIcon(sev), `${label} · ${n}`); })));
+  const rows = list.slice(0, 300).map((a) => {
+    const m = modOf(a.ev);
+    return h('div', { class: 'arow', onclick: () => { state.step = a.ev.step; select(a.ev.module, a.ev.call); } },
+      sevIcon(a.sev),
+      h('span', { class: 'lbl' }, a.label),
+      h('span', { class: 'p', title: m.path }, m.path || m.name, h('span', { class: 'muted' }, '  ', a.detail)),
+      multi ? h('span', { class: 'muted num' }, D.steps[a.ev.step].label) : h('span'));
+  });
+  host.append(h('div', { class: 'alist' }, rows, list.length > 300 && h('div', { class: 'muted', style: { padding: '6px 4px' } }, `… ${list.length - 300} more`)));
+}
+
+/* ------------------------------------------------------------------ signal flow chart */
+function groupsFor(vis) {
+  const paths = vis.map((sl) => D.mods[sl.module].path);
+  const n = paths.length;
+  for (const g of [1, 2, 3]) {
+    const keys = paths.map((p) => (p === '' ? '(root)' : p.split('.').slice(0, g).join('.')));
+    const runs = [];
+    keys.forEach((k, i) => { const last = runs[runs.length - 1]; if (last && last.key === k) last.end = i; else runs.push({ key: k, start: i, end: i }); });
+    // Judge by the longest consecutive run, so a sub-network called repeatedly (e.g. a target
+    // encoder once per rollout step) still groups at the top level.
+    const maxRun = Math.max(...runs.map((r) => r.end - r.start + 1)) / n;
+    if (runs.length >= 2 && runs.length <= 80 && maxRun <= 0.5) return runs;
+  }
+  return null;
+}
+const FLOW_M = { l: 64, r: 16, t: 24, b: 44 };
+
+function renderFlow() {
+  const host = $('#flow');
+  host.innerHTML = '';
+  const met = METRICS[state.metric];
+  const vis = visibleSlots();
+  const n = vis.length;
+  const roleTxt = met.noRole ? '' : state.role === 'in' ? ' of each module’s input' : ' of each module’s output';
+  $('#flow-sub').textContent = `${met.label} (${met.desc})${roleTxt}, in execution order${D.steps.length > 1 ? ' — ' + D.steps[state.step].label : ''}`;
+  if (!n) { host.append(h('div', { class: 'empty' }, 'No traced modules in this scope.')); $('#flow-legend').innerHTML = ''; return; }
+
+  const W = Math.max(300, host.clientWidth), H = 300, M = FLOW_M;
+  const pw = W - M.l - M.r, ph = H - M.t - M.b;
+  const y = yScaleFor(valuesAcrossSteps(vis, state.metric), state.metric, M.t + ph, M.t);
+  const bw = pw / n, xc = (i) => M.l + (i + 0.5) * bw;
+  const evs = vis.map((sl) => D.byStep[state.step].get(sl.key));
+
+  // legend: types present in scope
+  const present = new Set(vis.map((sl) => D.mods[sl.module].type));
+  const legendTypes = D.types.filter((t) => present.has(t) && D.typeColor.has(t));
+  const hasOther = [...present].some((t) => !D.typeColor.has(t));
+  const lg = $('#flow-legend');
+  lg.innerHTML = '';
+  legendTypes.forEach((t) => lg.append(h('span', {}, h('i', { class: 'sw', style: { background: typeColor(t) } }), t)));
+  if (hasOther) lg.append(h('span', {}, h('i', { class: 'sw', style: { background: 'var(--other)' } }), 'Other'));
+  if (D.jepa) {
+    const present = new Set(vis.map((sl) => (D.mods[sl.module].role || '').split('+')[0]).filter(Boolean));
+    if (present.size) {
+      lg.append(h('span', { class: 'muted', style: { 'margin-left': '8px' } }, 'Background:'));
+      for (const r of ['context', 'target', 'predictor']) if (present.has(r)) lg.append(h('span', {}, h('i', { class: 'sw', style: { background: roleColor(r), 'border-radius': '2px', opacity: 0.6 } }), ROLE_NAME[r]));
+    }
+  }
+
+  const svg = s('svg', { width: W, height: H, class: 'chart', role: 'img', 'aria-label': `${met.label} per module in execution order` });
+  // group bands + labels
+  const groups = groupsFor(vis);
+  if (groups) groups.forEach((g, gi) => {
+    const x0 = M.l + g.start * bw, w = (g.end - g.start + 1) * bw;
+    const role = D.jepa && D.mods[vis[g.start].module].role;
+    if (role) svg.append(s('rect', { x: x0 + 1, y: M.t, width: Math.max(0, w - 2), height: ph, style: { fill: roleColor(role), opacity: 0.08 } }));
+    else if (gi % 2 === 0) svg.append(s('rect', { x: x0, y: M.t, width: w, height: ph, class: 'band' }));
+    const label = g.key.length * 6.6 + 8 < w ? g.key : g.key.split('.').pop();
+    if (label.length * 6.6 + 6 < w) svg.append(s('text', { x: x0 + w / 2, y: M.t + ph + 16, class: 'glabel', 'text-anchor': 'middle' }, label));
+  });
+  for (const tv of y.ticks()) {
+    const yy = y(tv);
+    if (yy < M.t - 1 || yy > M.t + ph + 1) continue;
+    svg.append(s('line', { x1: M.l, x2: W - M.r, y1: yy, y2: yy, class: 'grid' }));
+    svg.append(s('text', { x: M.l - 8, y: yy + 4, class: 'tick', 'text-anchor': 'end' }, met.pct ? fmtPct(tv) : fmtTick(tv)));
+  }
+  svg.append(s('line', { x1: M.l, x2: W - M.r, y1: M.t + ph, y2: M.t + ph, class: 'axis' }));
+  svg.append(s('text', { x: W - M.r, y: H - 6, class: 'atitle', 'text-anchor': 'end' }, `execution order → (${n} module call${n === 1 ? '' : 's'})`));
+  if (y.kind === 'log') svg.append(s('text', { x: M.l, y: M.t - 10, class: 'atitle' }, 'log scale'));
+
+  // series
+  const valAt = (ev) => (met.range ? primary(ev, state.role)?.mean : metricValue(ev));
+  const runsOf = (getter) => {
+    const runs = [];
+    let cur = null;
+    evs.forEach((ev, i) => {
+      const v = ev ? getter(ev) : null;
+      if (v != null && y.valid(v)) { if (!cur) runs.push((cur = [])); cur.push([xc(i), v]); } else cur = null;
+    });
+    return runs;
+  };
+  if (met.range) {
+    const tOf = (ev) => primary(ev, state.role);
+    const runs = [];
+    let cur = null;
+    evs.forEach((ev, i) => {
+      const t = ev && tOf(ev);
+      if (t && t.q && y.valid(t.q[0]) && y.valid(t.q[4])) { if (!cur) runs.push((cur = [])); cur.push([xc(i), y(t.q[0]), y(t.q[4])]); } else cur = null;
+    });
+    for (const r of runs) {
+      const d = 'M' + r.map((p) => `${p[0]},${p[2]}`).join('L') + 'L' + r.slice().reverse().map((p) => `${p[0]},${p[1]}`).join('L') + 'Z';
+      svg.append(s('path', { d, class: 'area' }));
+    }
+    for (const r of runsOf(valAt)) svg.append(s('path', { d: 'M' + r.map((p) => `${p[0]},${y(p[1])}`).join('L'), class: 'sline' }));
+  } else {
+    for (const r of runsOf(valAt)) svg.append(s('path', { d: 'M' + r.map((p) => `${p[0]},${y(p[1])}`).join('L'), class: 'line' }));
+  }
+  const dense = bw < 9;
+  const sel = state.sel;
+  evs.forEach((ev, i) => {
+    if (!ev) return;
+    const v = valAt(ev);
+    if (!y.valid(v)) return;
+    svg.append(s('circle', { cx: xc(i), cy: y(v), r: dense ? 2.5 : 4, style: { fill: met.range ? 'var(--s1)' : typeColor(modOf(ev).type), stroke: dense ? 'none' : 'var(--surface)', 'stroke-width': '2px' } }));
+  });
+  // anomaly markers above the plot
+  evs.forEach((ev, i) => {
+    if (!ev || !ev.anomalies.length) return;
+    const ic = sevIcon(worst(ev.anomalies), 9);
+    ic.setAttribute('x', xc(i) - 4.5);
+    ic.setAttribute('y', M.t - 20);
+    svg.append(ic);
+  });
+  // selection
+  const si = vis.findIndex((sl) => sel && sl.module === sel.module && sl.call === sel.call);
+  if (si >= 0) {
+    svg.append(s('line', { x1: xc(si), x2: xc(si), y1: M.t, y2: M.t + ph, class: 'selline' }));
+    const ev = evs[si], v = ev && valAt(ev);
+    if (ev && y.valid(v)) svg.append(s('circle', { cx: xc(si), cy: y(v), r: 6.5, style: { fill: 'none', stroke: 'var(--text)', 'stroke-width': '2px' } }));
+  }
+  // hover layer
+  const cross = s('line', { y1: M.t, y2: M.t + ph, class: 'cross', style: { display: 'none' } });
+  svg.append(cross);
+  const hit = s('rect', { x: M.l, y: M.t - 22, width: pw, height: ph + 22, class: 'hit' });
+  const idxAt = (e) => { const r = svg.getBoundingClientRect(); return Math.max(0, Math.min(n - 1, Math.floor((e.clientX - r.left - M.l) / bw))); };
+  hit.addEventListener('mousemove', (e) => {
+    const i = idxAt(e), ev = evs[i];
+    cross.setAttribute('x1', xc(i)); cross.setAttribute('x2', xc(i)); cross.style.display = '';
+    if (ev) showTip(evTipHtml(ev), e.clientX, e.clientY);
+    else { const m = D.mods[vis[i].module]; showTip(`<b>${esc(m.path)}</b><div class="muted">not called in this step</div>`, e.clientX, e.clientY); }
+  });
+  hit.addEventListener('mouseleave', () => { cross.style.display = 'none'; hideTip(); });
+  hit.addEventListener('click', (e) => { const sl = vis[idxAt(e)]; select(sl.module, sl.call); });
+  svg.append(hit);
+  host.append(svg);
+}
+
+/* ------------------------------------------------------------------ colour ramps */
+function hexToRgb(hex) {
+  const v = hex.replace('#', '');
+  return [parseInt(v.slice(0, 2), 16), parseInt(v.slice(2, 4), 16), parseInt(v.slice(4, 6), 16)];
+}
+const mix = (a, b, t) => [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * t));
+function seqRamp() {
+  const stops = cssVar('--seq').split(',').map((x) => hexToRgb(x.trim()));
+  return (t) => {
+    t = Math.max(0, Math.min(1, t));
+    const p = t * (stops.length - 1), i = Math.min(stops.length - 2, Math.floor(p));
+    return mix(stops[i], stops[i + 1], p - i);
+  };
+}
+function divRamp() {
+  const neg = hexToRgb(cssVar('--div-neg')), mid = hexToRgb(cssVar('--div-mid')), pos = hexToRgb(cssVar('--div-pos'));
+  return (t) => { // t in [-1, 1]
+    t = Math.max(-1, Math.min(1, t));
+    return t < 0 ? mix(mid, neg, Math.pow(-t, 0.85)) : mix(mid, pos, Math.pow(t, 0.85));
+  };
+}
+const rgb = (c) => `rgb(${c[0]},${c[1]},${c[2]})`;
+function gradientCss(fn, from, to) {
+  const stops = [];
+  for (let i = 0; i <= 10; i++) stops.push(rgb(fn(from + (to - from) * (i / 10))));
+  return `linear-gradient(90deg, ${stops.join(',')})`;
+}
+function setupCanvas(cv, w, hgt) {
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(hgt * dpr);
+  cv.style.width = w + 'px'; cv.style.height = hgt + 'px';
+  const ctx = cv.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return ctx;
+}
+
+/* ------------------------------------------------------------------ module x step matrix */
+function renderMatrix() {
+  const host = $('#matrix');
+  if (!host) return;
+  host.innerHTML = '';
+  $('#matrix-scale').innerHTML = '';
+  const vis = visibleSlots(), n = vis.length, ns = D.steps.length;
+  const met = METRICS[state.metric];
+  $('#matrix-sub').textContent = `${met.label} for every module (columns, aligned with the chart above) at every step (rows). Click a cell to jump.`;
+  if (!n) return;
+  const W = Math.max(300, host.clientWidth), M = FLOW_M;
+  const pw = W - M.l - M.r, bw = pw / n;
+  const ch = Math.max(4, Math.min(22, Math.floor(260 / ns)));
+  const Hh = ns * ch + 2;
+  const cv = h('canvas', { role: 'img', 'aria-label': `${met.label} per module and step` });
+  const ctx = setupCanvas(cv, W, Hh);
+  const vals = valuesAcrossSteps(vis, met.range ? 'mean' : state.metric);
+  const scale = yScaleFor(vals, met.range ? 'mean' : state.metric, 0, 1);
+  const diverging = scale.kind === 'symlog' && scale.domain[0] < 0 && scale.domain[1] > 0;
+  const ramp = diverging ? divRamp() : seqRamp();
+  const colorOf = (v) => (diverging ? ramp(scale.norm(v) * 2 - 1) : ramp(scale.norm(v)));
+  const empty = cssVar('--surface-2');
+  for (let si = 0; si < ns; si++) {
+    for (let i = 0; i < n; i++) {
+      const ev = D.byStep[si].get(vis[i].key);
+      const v = ev ? metricValue(ev, met.range ? 'mean' : state.metric) : null;
+      ctx.fillStyle = v != null && scale.valid(v) ? rgb(colorOf(v)) : empty;
+      const x0 = Math.round(M.l + i * bw), x1 = Math.round(M.l + (i + 1) * bw);
+      ctx.fillRect(x0, 1 + si * ch, Math.max(1, x1 - x0), ch - (ch > 6 ? 1 : 0));
+    }
+    if (ch >= 11) {
+      ctx.fillStyle = cssVar(si === state.step ? '--text' : '--muted');
+      ctx.font = `${si === state.step ? 600 : 400} 11px ${cssVar('--sans')}`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(D.steps[si].label.slice(0, 10), M.l - 8, 1 + si * ch + ch / 2);
+    }
+  }
+  ctx.strokeStyle = cssVar('--text');
+  ctx.lineWidth = 2;
+  ctx.strokeRect(M.l - 1, state.step * ch, pw + 2, ch + 1);
+  const si = vis.findIndex((sl) => state.sel && sl.module === state.sel.module && sl.call === state.sel.call);
+  if (si >= 0) { ctx.strokeStyle = cssVar('--accent'); ctx.lineWidth = 1.5; ctx.strokeRect(Math.round(M.l + si * bw) - 1, 0, Math.max(2, bw) + 1, Hh); }
+  const cell = (e) => {
+    const r = cv.getBoundingClientRect();
+    const i = Math.floor((e.clientX - r.left - M.l) / bw), st = Math.floor((e.clientY - r.top - 1) / ch);
+    return i >= 0 && i < n && st >= 0 && st < ns ? [i, st] : null;
+  };
+  cv.addEventListener('mousemove', (e) => {
+    const c = cell(e);
+    if (!c) { hideTip(); return; }
+    const ev = D.byStep[c[1]].get(vis[c[0]].key);
+    if (!ev) { hideTip(); return; }
+    showTip(evTipHtml(ev, [['step', D.steps[c[1]].label]]), e.clientX, e.clientY);
+  });
+  cv.addEventListener('mouseleave', hideTip);
+  cv.addEventListener('click', (e) => { const c = cell(e); if (c) { state.step = c[1]; select(vis[c[0]].module, vis[c[0]].call); } });
+  cv.style.cursor = 'pointer';
+  host.append(cv);
+  // scale legend
+  const lo = scale.domain[0], hi = scale.domain[1];
+  const lab = (v) => (met.pct ? fmtPct(v) : fmt(v, 3));
+  $('#matrix-scale').append(h('div', { class: 'scalebar', style: { 'margin-left': M.l + 'px' } },
+    h('span', {}, lab(lo)),
+    h('span', { class: 'grad', style: { background: gradientCss(diverging ? (t) => ramp(t) : ramp, diverging ? -1 : 0, 1) } }),
+    h('span', {}, lab(hi)),
+    h('span', { class: 'muted' }, scale.kind === 'log' ? '(log)' : scale.kind === 'symlog' ? '(symmetric log)' : ''),
+    h('span', { class: 'nanchip' }, h('i', { style: { background: 'var(--surface-2)', border: '1px solid var(--border)' } }), 'not called')));
+}
+
+/* ------------------------------------------------------------------ details */
+function renderDetails() {
+  const host = $('#details');
+  host.innerHTML = '';
+  if (!state.sel) { host.append(h('div', { class: 'empty' }, 'Select a module in the tree or click a point in the chart.')); return; }
+  const m = D.mods[state.sel.module];
+  const chain = [];
+  for (let x = m; x; x = x.parent != null ? D.mods[x.parent] : null) chain.unshift(x);
+  host.append(h('div', { class: 'crumbs' }, chain.slice(0, -1).map((c, i) => [i ? h('span', {}, '›') : null, h('a', { onclick: () => select(c.id) }, c.name)])));
+  host.append(h('div', { class: 'dtitle' },
+    h('span', { class: 'path' }, m.path || m.name),
+    h('span', { class: 'typechip' }, h('i', { class: 'sw', style: { background: m.id === 0 ? 'var(--muted)' : typeColor(m.type) } }), m.type),
+    m.role && h('span', { class: 'typechip' }, h('i', { class: 'sw', style: { background: roleColor(m.role) } }), roleName(m.role)),
+    h('span', { class: 'muted' }, m.n_params_total ? `${fmtCount(m.n_params_total)} params` + (m.n_params_total !== m.n_params ? ` (${fmtCount(m.n_params)} own)` : '') : 'no params')));
+  if (m.extra) host.append(h('div', { class: 'extra' }, m.extra));
+  const inf = D.influence.get(m.id);
+  if (inf) {
+    const parts = [];
+    if (inf.d_loss != null) parts.push(['Δloss when ablated', fmtSigned(inf.d_loss)]);
+    if (inf.pred_drift != null) parts.push(['prediction drift', fmt(inf.pred_drift, 3)]);
+    if (inf.ctx_drift != null) parts.push(['context drift', fmt(inf.ctx_drift, 3)]);
+    if (inf.tgt_drift != null) parts.push(['target drift', fmt(inf.tgt_drift, 3)]);
+    if (inf.attr != null) parts.push(['grad × act', fmt(inf.attr, 3)]);
+    if (inf.error) parts.push(['ablation failed', inf.error]);
+    host.append(h('div', { class: 'note' }, h('b', {}, 'JEPA influence: '),
+      parts.map(([k, v], i) => [i ? ' · ' : '', k, ' ', h('span', { class: 'mono' }, v)])));
+  }
+
+  const evs = D.byStepModule[state.step].get(m.id) || [];
+  if (evs.length > 1) {
+    host.append(h('div', { class: 'tabs' }, h('span', { class: 'sec', style: { 'align-self': 'center' } }, 'Calls this step'),
+      evs.map((ev) => h('button', { class: 'tab', 'aria-pressed': String(ev.call === state.sel.call), onclick: () => select(m.id, ev.call) }, `#${ev.call + 1}`))));
+  }
+  const ev = evs.find((e) => e.call === state.sel.call) || evs[0];
+  if (!ev) {
+    host.append(h('div', { class: 'empty' }, m.traced ? 'This module was not called during this step.' : 'This module was not traced (excluded by include / exclude / leaves_only / max_depth).'));
+  } else {
+    if (ev.anomalies.length) host.append(h('div', { class: 'warnlist' }, ev.anomalies.map((a) => h('div', {}, sevIcon(a.sev), h('b', {}, a.label), h('span', { class: 'sec' }, a.detail)))));
+    const tensors = [...(ev.inputs || []).map((t) => ({ ...t, role: 'in' })), ...(ev.outputs || []).map((t) => ({ ...t, role: 'out' }))];
+    if (!tensors.length) host.append(h('div', { class: 'empty' }, 'No tensors captured for this call.'));
+    else {
+      let cur = tensors.find((t) => t.name === state.tensor) || tensors.find((t) => t.role === 'out') || tensors[0];
+      host.append(h('div', { class: 'tabs' }, tensors.map((t) => h('button', {
+        class: 'tab', 'aria-pressed': String(t === cur), onclick: () => { state.tensor = t.name; renderDetails(); },
+      }, t.name, ' ', h('span', { class: 'muted' }, fmtShape(t.shape))))));
+      const dropped = (cur.role === 'in' ? ev.inputs_dropped : ev.outputs_dropped);
+      renderTensor(host, cur, ev, dropped);
+    }
+  }
+  if (D.steps.length > 1 && ev) renderStepsMini(host, m, state.sel.call);
+  renderParams(host, m);
+}
+
+function renderTensor(host, t, ev, dropped) {
+  const g = gainOf(ev);
+  const rows = [
+    ['shape', fmtShape(t.shape)], ['dtype', t.dtype], ['elements', fmtCount(t.numel)],
+    ['mean', fmt(t.mean)], ['std', fmt(t.std)], ['rms', fmt(t.rms)], ['mean |x|', fmt(t.abs_mean)],
+    ['min', fmt(t.min)], ['max', fmt(t.max)],
+  ];
+  if (t.q) rows.push(['p1 / p25', `${fmt(t.q[0])} / ${fmt(t.q[1])}`], ['median', fmt(t.q[2])], ['p75 / p99', `${fmt(t.q[3])} / ${fmt(t.q[4])}`]);
+  rows.push(['exact zeros', fmtPct(t.zero_frac)], ['NaN / Inf', `${t.nan ?? 0} / ${t.inf ?? 0}`]);
+  if (g != null) rows.push(['gain (out ÷ in RMS)', fmt(g, 3)]);
+  if (ev.ms != null) rows.push(['time', `${fmt(ev.ms, 3)} ms`]);
+  if (dropped) rows.push(['tensors not captured', String(dropped)]);
+  const histHost = h('div');
+  host.append(h('div', { class: 'dgrid' },
+    h('table', { class: 'stats' }, h('tbody', {}, rows.map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))),
+    h('div', {},
+      h('div', { class: 'panel-title', style: { 'margin-top': 0 } }, h('h3', {}, 'Value distribution'),
+        h('span', { class: 'cap' }, `${t.hist ? t.hist.counts.length : 0} bins`),
+        h('label', { class: 'right' }, h('input', { type: 'checkbox', checked: state.histLog, onchange: (e) => { state.histLog = e.target.checked; renderDetails(); } }), 'Log counts')),
+      histHost)));
+  if (t.hist) requestAnimationFrame(() => drawHist(histHost, t));
+  else histHost.append(h('div', { class: 'empty' }, 'No finite values.'));
+  if (t.heatmap) renderHeatmap(host, t.heatmap);
+  if (t.channels) renderChannels(host, t.channels);
+}
+
+function drawHist(host, t) {
+  const W = Math.max(240, host.clientWidth), H = 180, M = { l: 44, r: 8, t: 8, b: 26 };
+  const pw = W - M.l - M.r, ph = H - M.t - M.b;
+  const { lo, hi, counts } = t.hist;
+  const n = counts.length, bw = pw / n;
+  const tr = (c) => (state.histLog ? Math.log10(1 + c) : c);
+  const cmax = Math.max(1, ...counts.map(tr));
+  const y = (c) => M.t + ph - (tr(c) / cmax) * ph;
+  const x = (v) => M.l + ((v - lo) / (hi - lo)) * pw;
+  const svg = s('svg', { width: W, height: H, class: 'chart', role: 'img', 'aria-label': 'Histogram of values' });
+  const yt = state.histLog ? [0, 1, 2, 3, 4, 5, 6, 7, 8].map((e) => 10 ** e).filter((v) => Math.log10(1 + v) <= cmax * 1.0001) : niceTicks(0, cmax, 3);
+  for (const v of yt) {
+    const yy = y(v);
+    svg.append(s('line', { x1: M.l, x2: W - M.r, y1: yy, y2: yy, class: 'grid' }));
+    svg.append(s('text', { x: M.l - 6, y: yy + 4, class: 'tick', 'text-anchor': 'end' }, fmtCount(v)));
+  }
+  const gap = bw > 4 ? 1 : 0;
+  counts.forEach((c, i) => {
+    if (!c) return;
+    const top = y(c), hgt = Math.max(1, M.t + ph - top), w = Math.max(1, bw - gap);
+    const r = Math.min(2, w / 2, hgt);
+    const x0 = M.l + i * bw, yb = M.t + ph;
+    svg.append(s('path', { class: 'bar', d: `M${x0},${yb}V${top + r}Q${x0},${top} ${x0 + r},${top}H${x0 + w - r}Q${x0 + w},${top} ${x0 + w},${top + r}V${yb}Z` }));
+  });
+  svg.append(s('line', { x1: M.l, x2: W - M.r, y1: M.t + ph, y2: M.t + ph, class: 'axis' }));
+  for (const v of niceTicks(lo, hi, Math.max(2, Math.floor(pw / 80)))) {
+    if (v < lo || v > hi) continue;
+    svg.append(s('text', { x: x(v), y: H - 8, class: 'tick', 'text-anchor': 'middle' }, fmtTick(v)));
+  }
+  if (lo < 0 && hi > 0) svg.append(s('line', { x1: x(0), x2: x(0), y1: M.t, y2: M.t + ph, class: 'axis' }));
+  if (t.mean != null && t.mean >= lo && t.mean <= hi) {
+    svg.append(s('line', { x1: x(t.mean), x2: x(t.mean), y1: M.t, y2: M.t + ph, class: 'ref' }));
+    const right = x(t.mean) < M.l + pw - 70;
+    svg.append(s('text', { x: x(t.mean) + (right ? 4 : -4), y: M.t + 10, class: 'reflabel', 'text-anchor': right ? 'start' : 'end' }, 'mean'));
+  }
+  const hit = s('rect', { x: M.l, y: M.t, width: pw, height: ph, class: 'hit' });
+  hit.addEventListener('mousemove', (e) => {
+    const r = svg.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor((e.clientX - r.left - M.l) / bw)));
+    const a = lo + ((hi - lo) * i) / n, b = lo + ((hi - lo) * (i + 1)) / n;
+    showTip(`<table><tr><td>range</td><td>${esc(fmt(a))} … ${esc(fmt(b))}</td></tr><tr><td>count</td><td>${counts[i].toLocaleString('en-US')}</td></tr></table>`, e.clientX, e.clientY);
+  });
+  hit.addEventListener('mouseleave', hideTip);
+  svg.append(hit);
+  host.innerHTML = '';
+  host.append(svg);
+}
+
+const LAYOUT_TEXT = {
+  vector: 'Values in order',
+  matrix: 'Rows: dim 0 · columns: dim 1',
+  sequence: 'Batch item 0 · rows: dim 1 (e.g. sequence position) · columns: last dim (features)',
+  flattened: 'Batch item 0 flattened to rows × last dim',
+  mosaic: 'Batch item 0 · one tile per channel (feature map)',
+};
+function decodeQ(hm) {
+  if (!hm._bytes) {
+    const bin = atob(hm.q), a = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i);
+    hm._bytes = a;
+  }
+  return hm._bytes;
+}
+function renderHeatmap(host, hm) {
+  const bytes = decodeQ(hm);
+  const { rows, cols } = hm, lo = hm.lo ?? 0, hi = hm.hi ?? 0;
+  const val = (b) => lo + (b / 254) * (hi - lo);
+  const pooled = hm.src && (hm.src[0] !== rows || hm.src[1] !== cols);
+  let cap = LAYOUT_TEXT[hm.layout] || '';
+  if (hm.layout === 'mosaic') cap = `First ${hm.channels} channels of batch item 0, ${hm.tile[0]}×${hm.tile[1]} per tile`;
+  if (pooled) cap += ` · average-pooled from ${hm.src[0]}×${hm.src[1]}`;
+  const wrap = h('div', { class: 'hm-wrap' });
+  host.append(h('div', { class: 'panel-title' }, h('h3', {}, 'Activation map'), h('span', { class: 'cap' }, cap)), wrap);
+  requestAnimationFrame(() => {
+    const W = Math.max(240, wrap.clientWidth);
+    const mosaic = hm.layout === 'mosaic';
+    const gap = mosaic ? 3 : 0;
+    const nc = mosaic ? hm.grid[1] : 1, nr = mosaic ? hm.grid[0] : 1;
+    const maxH = 380;
+    let cw, chh;
+    if (mosaic) { cw = chh = Math.max(1, Math.min((W - (nc - 1) * gap) / cols, (maxH - (nr - 1) * gap) / rows)); }
+    else { cw = W / cols; chh = Math.max(2, Math.min(maxH / rows, Math.max(cw, 150 / rows))); }
+    const totalW = mosaic ? cols * cw + (nc - 1) * gap : W;
+    const totalH = rows * chh + (mosaic ? (nr - 1) * gap : 0);
+    const cv = h('canvas', { role: 'img', 'aria-label': 'Activation heatmap' });
+    const ctx = setupCanvas(cv, totalW, totalH);
+    const diverging = lo < 0 && hi > 0;
+    const amax = Math.max(Math.abs(lo), Math.abs(hi)) || 1;
+    const ramp = diverging ? divRamp() : seqRamp();
+    const lut = new Array(256);
+    for (let b = 0; b < 255; b++) lut[b] = rgb(diverging ? ramp(val(b) / amax) : ramp(hi > lo ? b / 254 : 0.5));
+    lut[255] = cssVar('--nan');
+    const xOf = (c) => c * cw + (mosaic ? Math.floor(c / hm.tile[1]) * gap : 0);
+    const yOf = (r) => r * chh + (mosaic ? Math.floor(r / hm.tile[0]) * gap : 0);
+    let hasNan = false;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (mosaic) {
+          const tile = Math.floor(r / hm.tile[0]) * nc + Math.floor(c / hm.tile[1]);
+          if (tile >= hm.channels) continue;
+        }
+        const b = bytes[r * cols + c];
+        if (b === 255) hasNan = true;
+        ctx.fillStyle = lut[b];
+        const x0 = Math.round(xOf(c)), x1 = Math.round(xOf(c) + cw), y0 = Math.round(yOf(r)), y1 = Math.round(yOf(r) + chh);
+        ctx.fillRect(x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0));
+      }
+    }
+    const locate = (e) => {
+      const rc = cv.getBoundingClientRect();
+      const px = e.clientX - rc.left, py = e.clientY - rc.top;
+      let c, r;
+      if (mosaic) {
+        const tw = hm.tile[1] * cw + gap, th = hm.tile[0] * chh + gap;
+        const tc = Math.floor(px / tw), trr = Math.floor(py / th);
+        c = tc * hm.tile[1] + Math.floor((px - tc * tw) / cw);
+        r = trr * hm.tile[0] + Math.floor((py - trr * th) / chh);
+        if ((px - tc * tw) / cw >= hm.tile[1] || (py - trr * th) / chh >= hm.tile[0]) return null;
+      } else { c = Math.floor(px / cw); r = Math.floor(py / chh); }
+      return r >= 0 && r < rows && c >= 0 && c < cols ? [r, c] : null;
+    };
+    cv.addEventListener('mousemove', (e) => {
+      const p = locate(e);
+      if (!p) { hideTip(); return; }
+      const [r, c] = p, b = bytes[r * cols + c];
+      let where;
+      if (mosaic) {
+        const ch = Math.floor(r / hm.tile[0]) * nc + Math.floor(c / hm.tile[1]);
+        if (ch >= hm.channels) { hideTip(); return; }
+        where = [['channel', ch], ['position', `${r % hm.tile[0]}, ${c % hm.tile[1]}`]];
+      } else if (pooled) {
+        const r0 = Math.floor((r * hm.src[0]) / rows), r1 = Math.ceil(((r + 1) * hm.src[0]) / rows) - 1;
+        const c0 = Math.floor((c * hm.src[1]) / cols), c1 = Math.ceil(((c + 1) * hm.src[1]) / cols) - 1;
+        where = [['rows', r0 === r1 ? r0 : `${r0}–${r1}`], ['cols', c0 === c1 ? c0 : `${c0}–${c1}`]];
+      } else where = [['row', r], ['col', c]];
+      const v = b === 255 ? 'NaN / Inf' : fmt(val(b), 3) + (pooled || mosaic ? ' (avg)' : '');
+      showTip(`<table>${where.map(([k, x]) => `<tr><td>${k}</td><td>${x}</td></tr>`).join('')}<tr><td>value</td><td>${esc(v)}</td></tr></table>`, e.clientX, e.clientY);
+    });
+    cv.addEventListener('mouseleave', hideTip);
+    wrap.append(cv);
+    wrap.append(h('div', { class: 'scalebar' },
+      h('span', {}, fmt(diverging ? -amax : lo, 3)),
+      h('span', { class: 'grad', style: { background: diverging ? gradientCss(ramp, -1, 1) : gradientCss(ramp, 0, 1) } }),
+      h('span', {}, fmt(diverging ? amax : hi, 3)),
+      diverging && h('span', { class: 'muted' }, 'blue negative · gray zero · red positive'),
+      hasNan && h('span', { class: 'nanchip' }, h('i'), 'NaN / Inf')));
+  });
+}
+
+function renderChannels(host, chs) {
+  const wrap = h('div');
+  const pooled = chs.values.length < chs.n;
+  const top = chs.top.slice(0, 5);
+  host.append(h('div', { class: 'panel-title' },
+    h('h3', {}, 'Channel profile'),
+    h('span', { class: 'cap' }, `Mean |x| per channel along dim ${chs.axis} (${chs.n} channels${pooled ? `, max-pooled to ${chs.values.length} bars` : ''})`)), wrap);
+  requestAnimationFrame(() => {
+    const W = Math.max(240, wrap.clientWidth), H = 150, M = { l: 44, r: 8, t: 10, b: 22 };
+    const pw = W - M.l - M.r, ph = H - M.t - M.b;
+    const vals = chs.values.map((v) => v ?? 0), n = vals.length, bw = pw / n;
+    const vmax = Math.max(1e-12, ...vals);
+    const y = scaleLinear(0, vmax * 1.05, M.t + ph, M.t);
+    const svg = s('svg', { width: W, height: H, class: 'chart', role: 'img', 'aria-label': 'Per-channel mean absolute value' });
+    for (const tv of y.ticks()) {
+      svg.append(s('line', { x1: M.l, x2: W - M.r, y1: y(tv), y2: y(tv), class: 'grid' }));
+      svg.append(s('text', { x: M.l - 6, y: y(tv) + 4, class: 'tick', 'text-anchor': 'end' }, fmtTick(tv)));
+    }
+    const gap = bw > 4 ? 1 : 0;
+    const hiThresh = chs.median > 0 ? chs.median * 6 : Infinity;
+    vals.forEach((v, i) => {
+      if (!v) return;
+      const top = y(v), w = Math.max(1, bw - gap), hgt = Math.max(1, M.t + ph - top);
+      svg.append(s('rect', { x: M.l + i * bw, y: top, width: w, height: hgt, class: 'bar' + (v >= hiThresh ? ' hl' : '') }));
+    });
+    svg.append(s('line', { x1: M.l, x2: W - M.r, y1: M.t + ph, y2: M.t + ph, class: 'axis' }));
+    if (chs.median != null) {
+      svg.append(s('line', { x1: M.l, x2: W - M.r, y1: y(chs.median), y2: y(chs.median), class: 'ref' }));
+      svg.append(s('text', { x: W - M.r, y: y(chs.median) - 4, class: 'reflabel', 'text-anchor': 'end' }, `median ${fmt(chs.median, 3)}`));
+    }
+    svg.append(s('text', { x: M.l, y: H - 6, class: 'tick' }, '0'));
+    svg.append(s('text', { x: W - M.r, y: H - 6, class: 'tick', 'text-anchor': 'end' }, String(chs.n - 1)));
+    svg.append(s('text', { x: M.l + pw / 2, y: H - 6, class: 'atitle', 'text-anchor': 'middle' }, 'channel'));
+    const hit = s('rect', { x: M.l, y: M.t, width: pw, height: ph, class: 'hit' });
+    hit.addEventListener('mousemove', (e) => {
+      const r = svg.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor((e.clientX - r.left - M.l) / bw)));
+      const a = Math.floor((i * chs.n) / n), b = Math.ceil(((i + 1) * chs.n) / n) - 1;
+      const ratio = chs.median > 0 ? ` (${fmt(vals[i] / chs.median, 3)}× median)` : '';
+      showTip(`<table><tr><td>${a === b ? 'channel' : 'channels'}</td><td>${a === b ? a : `${a}–${b}`}</td></tr><tr><td>${a === b ? 'mean |x|' : 'max of mean |x|'}</td><td>${esc(fmt(vals[i], 3) + ratio)}</td></tr></table>`, e.clientX, e.clientY);
+    });
+    hit.addEventListener('mouseleave', hideTip);
+    svg.append(hit);
+    wrap.append(svg);
+    wrap.append(h('div', { class: 'sec', style: { 'margin-top': '4px' } }, 'Largest channels: ',
+      top.map(([c, v], i) => [i ? ' · ' : '', h('span', { class: 'mono' }, `#${c}`), ` ${fmt(v, 3)}`, chs.median > 0 ? h('span', { class: 'muted' }, ` (${fmt(v / chs.median, 3)}×)`) : ''])));
+  });
+}
+
+function renderStepsMini(host, m, call) {
+  const key = m.id + ':' + call;
+  const met = METRICS[state.metric];
+  const mkey = met.range ? 'mean' : state.metric;
+  const wrap = h('div');
+  host.append(h('div', { class: 'panel-title' }, h('h3', {}, `${METRICS[mkey].label} across steps`), h('span', { class: 'cap' }, 'this module only · click a point to jump to that step')), wrap);
+  requestAnimationFrame(() => {
+    const W = Math.max(240, wrap.clientWidth), H = 130, M = { l: 56, r: 12, t: 10, b: 22 };
+    const pw = W - M.l - M.r, ph = H - M.t - M.b, ns = D.steps.length;
+    const evs = D.steps.map((_, si) => D.byStep[si].get(key));
+    const vals = evs.map((ev) => (ev ? metricValue(ev, mkey) : null));
+    const y = yScaleFor(vals, mkey, M.t + ph, M.t);
+    const x = (i) => M.l + (ns === 1 ? pw / 2 : (i * pw) / (ns - 1));
+    const svg = s('svg', { width: W, height: H, class: 'chart', role: 'img', 'aria-label': `${METRICS[mkey].label} of ${m.path} across steps` });
+    for (const tv of y.ticks()) {
+      const yy = y(tv);
+      if (yy < M.t - 1 || yy > M.t + ph + 1) continue;
+      svg.append(s('line', { x1: M.l, x2: W - M.r, y1: yy, y2: yy, class: 'grid' }));
+      svg.append(s('text', { x: M.l - 6, y: yy + 4, class: 'tick', 'text-anchor': 'end' }, METRICS[mkey].pct ? fmtPct(tv) : fmtTick(tv)));
+    }
+    svg.append(s('line', { x1: M.l, x2: W - M.r, y1: M.t + ph, y2: M.t + ph, class: 'axis' }));
+    const pts = vals.map((v, i) => (y.valid(v) ? [x(i), y(v)] : null));
+    let d = '', pen = false;
+    for (const p of pts) { if (p) { d += (pen ? 'L' : 'M') + p[0] + ',' + p[1]; pen = true; } else pen = false; }
+    if (d) svg.append(s('path', { d, class: 'sline' }));
+    pts.forEach((p, i) => { if (p) svg.append(s('circle', { cx: p[0], cy: p[1], r: i === state.step ? 5 : 3, style: { fill: 'var(--s1)', stroke: 'var(--surface)', 'stroke-width': '2px' } })); });
+    if (pts[state.step]) svg.append(s('circle', { cx: pts[state.step][0], cy: pts[state.step][1], r: 7.5, style: { fill: 'none', stroke: 'var(--text)', 'stroke-width': '1.5px' } }));
+    svg.append(s('text', { x: M.l, y: H - 6, class: 'tick' }, D.steps[0].label));
+    svg.append(s('text', { x: W - M.r, y: H - 6, class: 'tick', 'text-anchor': 'end' }, D.steps[ns - 1].label));
+    const hit = s('rect', { x: M.l - 8, y: M.t, width: pw + 16, height: ph, class: 'hit' });
+    const idx = (e) => { const r = svg.getBoundingClientRect(); return ns === 1 ? 0 : Math.max(0, Math.min(ns - 1, Math.round(((e.clientX - r.left - M.l) / pw) * (ns - 1)))); };
+    hit.addEventListener('mousemove', (e) => {
+      const i = idx(e);
+      showTip(`<b>${esc(D.steps[i].label)}</b><table><tr><td>${esc(METRICS[mkey].label)}</td><td>${esc(METRICS[mkey].pct ? fmtPct(vals[i]) : fmt(vals[i]))}</td></tr></table>`, e.clientX, e.clientY);
+    });
+    hit.addEventListener('mouseleave', hideTip);
+    hit.addEventListener('click', (e) => setStep(idx(e)));
+    svg.append(hit);
+    wrap.append(svg);
+  });
+}
+
+function sparkHist(counts) {
+  const W = 84, H = 18, n = counts.length, mx = Math.max(1, ...counts);
+  const d = counts.map((c, i) => `${i ? 'L' : 'M'}${((i + 0.5) / n) * W},${H - (c / mx) * (H - 2) - 1}`).join('');
+  return s('svg', { width: W, height: H, 'aria-hidden': 'true' }, s('path', { d, style: { fill: 'none', stroke: 'var(--s1)', 'stroke-width': '1.5px' } }));
+}
+function renderParams(host, m) {
+  const ps = [...(m.params || []).map((p) => ({ ...p, buf: false })), ...(m.buffers || []).map((p) => ({ ...p, buf: true }))];
+  if (!ps.length) return;
+  host.append(h('div', { class: 'panel-title' }, h('h3', {}, 'Parameters & buffers'), h('span', { class: 'cap' }, 'captured once when the tracer attached')));
+  host.append(h('div', { class: 'scroll-x' }, h('table', { class: 'params' },
+    h('thead', {}, h('tr', {}, ['name', 'shape', 'dtype', 'rms', 'std', 'min', 'max', 'zeros', 'NaN/Inf', 'distribution'].map((c, i) => h('th', { class: i >= 3 && i <= 8 ? 'r' : '' }, c)))),
+    h('tbody', {}, ps.map((p) => h('tr', {},
+      h('td', { class: 'mono' }, p.name, p.buf ? h('span', { class: 'muted' }, ' (buffer)') : ''),
+      h('td', { class: 'mono' }, fmtShape(p.shape)), h('td', {}, p.dtype),
+      h('td', { class: 'r' }, fmt(p.rms, 3)), h('td', { class: 'r' }, fmt(p.std, 3)),
+      h('td', { class: 'r' }, fmt(p.min, 3)), h('td', { class: 'r' }, fmt(p.max, 3)),
+      h('td', { class: 'r' }, fmtPct(p.zero_frac)), h('td', { class: 'r' }, `${p.nan ?? 0}/${p.inf ?? 0}`),
+      h('td', {}, p.hist ? sparkHist(p.hist.counts) : '')))))));
+}
+
+/* ------------------------------------------------------------------ JEPA view */
+const ROLE_COLOR = { context: 'var(--s1)', target: 'var(--s2)', prediction: 'var(--s3)', predictor: 'var(--s3)' };
+const ROLE_NAME = { context: 'Context encoder', target: 'Target encoder', prediction: 'Predictor output', predictor: 'Predictor' };
+const EMB_ROLES = ['context', 'target', 'prediction'];
+const EMB_NAME = { context: 'Context', target: 'Target', prediction: 'Predicted' };
+const roleColor = (r) => ROLE_COLOR[String(r).split('+')[0]] || 'var(--other)';
+const roleName = (r) => String(r).split('+').map((x) => ROLE_NAME[x] || x).join(' + ');
+const fmtSigned = (v) => (v == null ? '—' : (v >= 0 ? '+' : '−') + fmt(Math.abs(v) * 100, 3) + '%');
+const STATUS = {
+  healthy: { sev: 'good', label: 'Healthy' },
+  offset: { sev: 'warning', label: 'Offset-dominated' },
+  dimensional: { sev: 'warning', label: 'Dimensional collapse' },
+  collapsed: { sev: 'critical', label: 'Collapsed' },
+};
+const badge = (sev, label) => h('span', { class: 'badge' }, sevIcon(sev), label);
+const resolveColor = (v) => (v.startsWith('var(') ? cssVar(v.slice(4, -1)) : v);
+const rgba = (hex, a) => { const [r, g, b] = hexToRgb(hex); return `rgba(${r},${g},${b},${a})`; };
+const roleSwatch = (r) => h('i', { class: 'sw', style: { background: roleColor(r) } });
+let pending = [];
+
+function renderJepa() {
+  const host = $('#jepa');
+  if (!host || !D.jepa) return;
+  const scroll = host.scrollTop;
+  host.innerHTML = '';
+  pending = [];
+  const J = D.jepa;
+  host.append(jepaTiles(J), landscapeCard(J), varianceCard(J), predictionCard(J));
+  if (J.influence) host.append(influenceCard(J));
+  for (const fn of pending) fn();
+  host.scrollTop = scroll;
+}
+
+function card(title, sub, ...kids) {
+  return h('section', { class: 'card' }, h('div', { class: 'card-head' }, h('h2', {}, title), sub && h('span', { class: 'sec' }, sub)), ...kids);
+}
+function predictorVerdict(J) {
+  const P = J.prediction.overall, E = J.embeddings;
+  if (E.target && E.target.status === 'collapsed') return ['critical', 'Trivial: target collapsed'];
+  if (P.r2 == null) return ['critical', 'Target has no variance'];
+  if (P.r2 < 0) return ['serious', 'Worse than predicting the mean'];
+  if (P.copy_r2 != null && P.r2 <= P.copy_r2) return ['warning', 'No better than copying context'];
+  return ['good', P.copy_r2 != null ? 'Beats mean and copy baselines' : 'Beats mean baseline'];
+}
+
+function jepaTiles(J) {
+  const E = J.embeddings, P = J.prediction.overall;
+  const tile = (label, value, sub, extra) => h('div', { class: 'tile' }, h('div', { class: 'tl' }, label), h('div', { class: 'tv' }, value), sub && h('div', { class: 'ts' }, sub), extra);
+  const enc = (role) => {
+    const st = E[role];
+    if (!st) return null;
+    const S = STATUS[st.status] || STATUS.healthy;
+    return tile([roleSwatch(role), `${EMB_NAME[role]} embeddings`],
+      [fmt(st.erank, 3), h('small', {}, ` / ${st.max_rank} effective rank`)], st.status_reason,
+      h('div', { style: { 'margin-top': '6px' } }, badge(S.sev, S.label)));
+  };
+  const [sev, lab] = predictorVerdict(J);
+  const tiles = [enc('context'), enc('target'),
+    tile([roleSwatch('prediction'), 'Prediction vs target'], [h('small', {}, 'R² '), fmt(P.r2, 3)],
+      `cosine ${fmt(P.cos, 3)} · MSE ${fmt(P.mse, 3)}` + (P.copy_r2 != null ? ` · copy-context R² ${fmt(P.copy_r2, 3)}` : ''),
+      h('div', { style: { 'margin-top': '6px' } }, badge(sev, lab)))];
+  const ins = ((J.influence && J.influence.inputs) || []).filter((i) => i.d_loss != null);
+  if (ins.length) {
+    const top = ins.slice().sort((a, b) => b.d_loss - a.d_loss)[0];
+    const act = ins.find((i) => /action|act\b|ctrl|control/i.test(i.name));
+    const show = act || top;
+    tiles.push(tile(act ? 'Action sensitivity' : 'Most influential input', [h('span', { class: 'mono' }, show.name), h('small', {}, ` ${fmtSigned(show.d_loss)} loss`)],
+      `when “${show.name}” is shuffled across the batch · prediction drift ${fmt(show.pred_drift, 3)}`,
+      act && h('div', { style: { 'margin-top': '6px' } }, show.pred_drift != null && show.pred_drift < 0.05
+        ? badge('warning', 'Predictor ignores actions') : badge('good', 'Predictor uses actions'))));
+  }
+  return h('div', { class: 'tiles' }, tiles);
+}
+
+/* ---- landscape */
+function landscapePoints(L) {
+  const k = L.pcs, out = {};
+  for (const r of EMB_ROLES) {
+    const R = L.roles[r];
+    if (!R) continue;
+    const pts = [];
+    for (let i = 0; i < R.n; i++) {
+      if (state.lh !== 'all' && R.h && String(R.h[i]) !== state.lh) continue;
+      const x = R.xy[i * k + state.lx], y = R.xy[i * k + state.ly];
+      if (x == null || y == null) continue;
+      pts.push({ i, x, y, b: R.b[i], tok: R.tok ? R.tok[i] : null, h: R.h ? R.h[i] : null, err: R.err ? R.err[i] : null });
+    }
+    out[r] = pts;
+  }
+  return out;
+}
+function cov2(pts) {
+  const n = pts.length;
+  if (n < 2) return null;
+  let mx = 0, my = 0;
+  for (const p of pts) { mx += p.x; my += p.y; }
+  mx /= n; my /= n;
+  let a = 0, b = 0, c = 0;
+  for (const p of pts) { const dx = p.x - mx, dy = p.y - my; a += dx * dx; b += dx * dy; c += dy * dy; }
+  return { mx, my, a: a / (n - 1), b: b / (n - 1), c: c / (n - 1) };
+}
+function landscapeCard(J) {
+  const L = J.landscape;
+  const H = Math.max(1, ...EMB_ROLES.map((r) => (L.roles[r] && L.roles[r].h ? Math.max(...L.roles[r].h) + 1 : 1)));
+  if (state.lx >= L.pcs) state.lx = 0;
+  if (state.ly >= L.pcs) state.ly = Math.min(1, L.pcs - 1);
+  const pcSel = (cur, set) => h('select', { onchange: (e) => { set(+e.target.value); renderJepa(); } },
+    Array.from({ length: L.pcs }, (_, i) => h('option', { value: i, selected: i === cur }, `PC${i + 1} · ${fmtPct(L.explained[i])}`)));
+  const chk = (label, key) => h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: state[key], onchange: (e) => { state[key] = e.target.checked; renderJepa(); } }), label);
+  const controls = h('div', { class: 'controls' },
+    h('label', { class: 'field' }, 'X', pcSel(state.lx, (v) => { state.lx = v; })),
+    h('label', { class: 'field' }, 'Y', pcSel(state.ly, (v) => { state.ly = v; })),
+    h('div', { class: 'seg', role: 'group', 'aria-label': 'Embeddings shown' }, EMB_ROLES.filter((r) => L.roles[r]).map((r) => h('button', {
+      class: 'rolebtn', 'aria-pressed': String(state.lroles.has(r)),
+      onclick: () => { if (state.lroles.has(r)) state.lroles.delete(r); else state.lroles.add(r); renderJepa(); },
+    }, roleSwatch(r), EMB_NAME[r]))),
+    H > 1 && h('label', { class: 'field' }, 'Horizon', h('select', { onchange: (e) => { state.lh = e.target.value; renderJepa(); } },
+      h('option', { value: 'all', selected: state.lh === 'all' }, 'All'),
+      Array.from({ length: H }, (_, i) => h('option', { value: String(i), selected: state.lh === String(i) }, `t+${i + 1}`)))),
+    h('label', { class: 'field' }, 'Scale', h('select', { onchange: (e) => { state.lscale = e.target.value; renderJepa(); } },
+      h('option', { value: 'norm', selected: state.lscale === 'norm' }, 'Embedding norm'),
+      h('option', { value: 'zoom', selected: state.lscale === 'zoom' }, 'Zoom to data'))),
+    h('label', { class: 'field' }, 'Color', h('select', { onchange: (e) => { state.lcolor = e.target.value; renderJepa(); } },
+      h('option', { value: 'role', selected: state.lcolor === 'role' }, 'Role'),
+      h('option', { value: 'err', selected: state.lcolor === 'err' }, 'Prediction error'))),
+    chk('2σ ellipses', 'ellipses'), chk('Density', 'density'), chk('Error vectors', 'vectors'));
+  const plot = h('div', { class: 'hm-wrap' }), side = h('div');
+  pending.push(() => drawLandscape(plot, side, L));
+  const ctxOwn = L.roles.context && L.roles.context.basis === 'own';
+  return card('Embedding landscape',
+    'Joint PCA of context, target and predicted embeddings. Both axes share one scale, so the spread you see is the real variance; a collapsed encoder shrinks to a dot or a line.',
+    controls, h('div', { class: 'land' }, plot, side),
+    ctxOwn && h('div', { class: 'note' }, 'Context embeddings have a different width than targets, so they are shown in their own PCA basis.'));
+}
+function drawLandscape(plot, side, L) {
+  const P = landscapePoints(L);
+  const vis = EMB_ROLES.filter((r) => P[r] && state.lroles.has(r));
+  const frame = Object.values(P).flat(); // frame on every role, so toggling doesn't rescale
+  const W = Math.max(280, plot.clientWidth), Hh = Math.round(Math.min(560, Math.max(300, W * 0.7)));
+  const M = { l: 52, r: 12, t: 22, b: 34 }, pw = W - M.l - M.r, ph = Hh - M.t - M.b;
+  const cv = h('canvas', { role: 'img', 'aria-label': 'Scatter of embeddings on two principal components' });
+  const ctx = setupCanvas(cv, W, Hh);
+  plot.append(cv);
+  if (!frame.length) return;
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const p of frame) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+  // "norm" frames the plot by the embeddings' own size, so a collapsed set is visibly a dot;
+  // "zoom" fits the data (and the note below says how far we zoomed).
+  const E = D.jepa.embeddings;
+  const R = Math.max(1e-12, ...EMB_ROLES.map((r) => (E[r] && E[r].mean_norm) || 0));
+  const halfData = Math.max(Math.abs(x0), Math.abs(x1), Math.abs(y0), Math.abs(y1));
+  let cx, cy, span;
+  if (state.lscale === 'norm') {
+    const half = Math.max(R, halfData) * 1.08;
+    cx = 0; cy = 0; span = (2 * half) / Math.min(pw, ph);
+  } else {
+    cx = (x0 + x1) / 2; cy = (y0 + y1) / 2;
+    span = Math.max((x1 - x0) / pw, (y1 - y0) / ph) * 1.12;
+  }
+  if (!(span > 0)) span = 1e-6;
+  const spreadRatio = Math.max(x1 - x0, y1 - y0) / 2 / R;
+  const X = (v) => M.l + pw / 2 + (v - cx) / span, Y = (v) => M.t + ph / 2 - (v - cy) / span;
+  const sans = cssVar('--sans');
+  // grid + ticks
+  ctx.lineWidth = 1;
+  ctx.font = `11px ${sans}`;
+  const xt = niceTicks(cx - (pw / 2) * span, cx + (pw / 2) * span, Math.max(3, Math.floor(pw / 90)));
+  const yt = niceTicks(cy - (ph / 2) * span, cy + (ph / 2) * span, Math.max(3, Math.floor(ph / 70)));
+  for (const t of xt) {
+    const px = Math.round(X(t)) + 0.5;
+    ctx.strokeStyle = cssVar(t === 0 ? '--axis' : '--grid');
+    ctx.beginPath(); ctx.moveTo(px, M.t); ctx.lineTo(px, M.t + ph); ctx.stroke();
+    ctx.fillStyle = cssVar('--muted'); ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText(minus(fmtTick(t)), px, M.t + ph + 14);
+  }
+  for (const t of yt) {
+    const py = Math.round(Y(t)) + 0.5;
+    ctx.strokeStyle = cssVar(t === 0 ? '--axis' : '--grid');
+    ctx.beginPath(); ctx.moveTo(M.l, py); ctx.lineTo(M.l + pw, py); ctx.stroke();
+    ctx.fillStyle = cssVar('--muted'); ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText(minus(fmtTick(t)), M.l - 6, py);
+  }
+  ctx.textBaseline = 'alphabetic';
+  ctx.textAlign = 'center';
+  ctx.fillText(`PC${state.lx + 1} · ${fmtPct(L.explained[state.lx])} of variance`, M.l + pw / 2, Hh - 4);
+  ctx.textAlign = 'left';
+  ctx.fillText(`PC${state.ly + 1} · ${fmtPct(L.explained[state.ly])} of variance`, M.l, 12);
+
+  ctx.save();
+  ctx.beginPath(); ctx.rect(M.l, M.t, pw, ph); ctx.clip();
+  const col = Object.fromEntries(EMB_ROLES.map((r) => [r, resolveColor(roleColor(r))]));
+  // density
+  if (state.density) {
+    const cs = 8, gw = Math.ceil(pw / cs), gh = Math.ceil(ph / cs);
+    for (const r of vis) {
+      const grid = new Float32Array(gw * gh);
+      for (const p of P[r]) {
+        const gx = Math.floor((X(p.x) - M.l) / cs), gy = Math.floor((Y(p.y) - M.t) / cs);
+        if (gx >= 0 && gx < gw && gy >= 0 && gy < gh) grid[gy * gw + gx]++;
+      }
+      const tmp = new Float32Array(gw * gh);
+      for (let pass = 0; pass < 2; pass++) {
+        for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { let s2 = 0; for (let d = -2; d <= 2; d++) { const xx = x + d; if (xx >= 0 && xx < gw) s2 += grid[y * gw + xx]; } tmp[y * gw + x] = s2 / 5; }
+        for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) { let s2 = 0; for (let d = -2; d <= 2; d++) { const yy = y + d; if (yy >= 0 && yy < gh) s2 += tmp[yy * gw + x]; } grid[y * gw + x] = s2 / 5; }
+      }
+      let mx = 0;
+      for (const v of grid) mx = Math.max(mx, v);
+      if (!mx) continue;
+      for (let y = 0; y < gh; y++) for (let x = 0; x < gw; x++) {
+        const a = 0.3 * Math.pow(grid[y * gw + x] / mx, 0.7);
+        if (a < 0.015) continue;
+        ctx.fillStyle = rgba(col[r], a);
+        ctx.fillRect(M.l + x * cs, M.t + y * cs, cs, cs);
+      }
+    }
+  }
+  // prediction -> target error vectors
+  if (state.vectors && P.prediction && P.target) {
+    const tByI = new Map(P.target.map((p) => [p.i, p]));
+    ctx.strokeStyle = rgba(cssVar('--muted'), 0.45);
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const p of P.prediction) { const t = tByI.get(p.i); if (t) { ctx.moveTo(X(p.x), Y(p.y)); ctx.lineTo(X(t.x), Y(t.y)); } }
+    ctx.stroke();
+  }
+  // points
+  const errs = [...(P.prediction || []), ...(P.target || [])].map((p) => p.err).filter((v) => v > 0);
+  const elo = errs.length ? Math.log10(Math.min(...errs)) : 0, ehi = errs.length ? Math.log10(Math.max(...errs)) : 1;
+  const ramp = seqRamp();
+  const errColor = (e) => rgb(ramp(e > 0 && ehi > elo ? (Math.log10(e) - elo) / (ehi - elo) : 0.5));
+  for (const r of vis) {
+    for (const p of P[r]) {
+      ctx.fillStyle = state.lcolor === 'err' && p.err != null ? errColor(p.err) : rgba(col[r], 0.75);
+      ctx.beginPath(); ctx.arc(X(p.x), Y(p.y), 2.4, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  // 2-sigma covariance ellipses
+  const stats = {};
+  for (const r of EMB_ROLES) if (P[r]) stats[r] = cov2(P[r]);
+  if (state.ellipses) {
+    for (const r of vis) {
+      const C = stats[r];
+      if (!C) continue;
+      const tr = C.a + C.c, det = C.a * C.c - C.b * C.b, disc = Math.sqrt(Math.max(0, (tr * tr) / 4 - det));
+      const l1 = Math.max(0, tr / 2 + disc), l2 = Math.max(0, tr / 2 - disc);
+      const ang = 0.5 * Math.atan2(2 * C.b, C.a - C.c);
+      const rx = Math.max(1.5, (2 * Math.sqrt(l1)) / span), ry = Math.max(1.5, (2 * Math.sqrt(l2)) / span);
+      for (const [w, c] of [[4, cssVar('--surface')], [2, col[r]]]) {
+        ctx.lineWidth = w; ctx.strokeStyle = c;
+        ctx.beginPath(); ctx.ellipse(X(C.mx), Y(C.my), rx, ry, -ang, 0, Math.PI * 2); ctx.stroke();
+      }
+      ctx.fillStyle = col[r];
+      ctx.beginPath(); ctx.arc(X(C.mx), Y(C.my), 3.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  ctx.restore();
+  // scale annotation: how big the cloud is relative to the embeddings themselves
+  {
+    const txt = state.lscale === 'norm'
+      ? `frame = mean embedding norm (${fmt(R, 3)}) · cloud half-width ${fmtPct(spreadRatio)} of it`
+      : `zoomed to data · cloud half-width is ${fmtPct(spreadRatio)} of the mean embedding norm (${fmt(R, 3)})`;
+    ctx.font = `12px ${sans}`;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'top';
+    const tw = ctx.measureText(txt).width;
+    ctx.fillStyle = rgba(cssVar('--surface'), 0.85);
+    ctx.fillRect(M.l + pw - tw - 14, M.t + 4, tw + 10, 20);
+    ctx.fillStyle = cssVar(spreadRatio < 0.05 ? '--text' : '--text-2');
+    ctx.fillText(txt, M.l + pw - 9, M.t + 8);
+    ctx.textBaseline = 'alphabetic';
+  }
+  // hover
+  cv.addEventListener('mousemove', (e) => {
+    const rc = cv.getBoundingClientRect(), mx = e.clientX - rc.left, my = e.clientY - rc.top;
+    let best = null, bd = 100;
+    for (const r of vis) for (const p of P[r]) { const d = (X(p.x) - mx) ** 2 + (Y(p.y) - my) ** 2; if (d < bd) { bd = d; best = [r, p]; } }
+    if (!best) { hideTip(); return; }
+    const [r, p] = best;
+    const rows = [['sample', p.b], p.tok != null && ['token', p.tok], p.h != null && ['horizon', `t+${p.h + 1}`],
+      [`PC${state.lx + 1}`, fmt(p.x, 3)], [`PC${state.ly + 1}`, fmt(p.y, 3)], p.err != null && ['prediction MSE', fmt(p.err, 3)]].filter(Boolean);
+    showTip(`<b>${esc(EMB_NAME[r])} embedding</b><table>${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table>`, e.clientX, e.clientY);
+  });
+  cv.addEventListener('mouseleave', hideTip);
+
+  // side panel: per-role spread along the shown axes + joint PCA scree
+  side.innerHTML = '';
+  side.append(h('table', {},
+    h('thead', {}, h('tr', {}, h('th', {}, 'spread'), h('th', {}, `σ PC${state.lx + 1}`), h('th', {}, `σ PC${state.ly + 1}`))),
+    h('tbody', {}, EMB_ROLES.filter((r) => stats[r]).map((r) => h('tr', {},
+      h('td', {}, h('span', { class: 'rolebtn' }, roleSwatch(r), EMB_NAME[r])),
+      h('td', {}, fmt(Math.sqrt(stats[r].a), 3)), h('td', {}, fmt(Math.sqrt(stats[r].c), 3)))))));
+  const exp = L.explained;
+  const emax = Math.max(...exp.map((v) => v || 0), 1e-9);
+  side.append(h('div', { class: 'panel-title' }, h('h3', {}, 'Joint PCA'), h('span', { class: 'cap' }, 'share of variance')));
+  side.append(h('div', { class: 'bars' }, exp.map((v, i) => h('div', { class: 'brow', style: { 'grid-template-columns': '40px minmax(0,1fr) 52px', cursor: 'default' } },
+    h('span', { class: 'bl' }, `PC${i + 1}`),
+    h('div', { class: 'track' }, h('div', { class: 'fill', style: { left: 0, width: `${((v || 0) / emax) * 100}%`, background: i === state.lx || i === state.ly ? 'var(--accent)' : 'var(--other)', 'border-radius': '0 4px 4px 0' } })),
+    h('span', { class: 'bv' }, fmtPct(v))))));
+  if (state.lcolor === 'err' && errs.length) {
+    side.append(h('div', { class: 'scalebar' }, h('span', {}, fmt(10 ** elo, 2)),
+      h('span', { class: 'grad', style: { width: '110px', background: gradientCss(ramp, 0, 1) } }), h('span', {}, fmt(10 ** ehi, 2)), h('span', { class: 'muted' }, 'MSE (log)')));
+  }
+  side.append(h('div', { class: 'note' }, 'Ellipses enclose ±2σ of each set along the shown axes. Use “Error vectors” to connect each prediction to its target.'));
+}
+
+/* ---- variance structure */
+function varianceCard(J) {
+  const E = J.embeddings;
+  const roles = EMB_ROLES.filter((r) => E[r]);
+  const spec = h('div'), stdHost = h('div', { class: 'multiples' }), corrHost = h('div', { class: 'multiples' });
+  const row = (label, f) => h('tr', {}, h('td', {}, label), roles.map((r) => h('td', {}, f(E[r]))));
+  const table = h('table', { class: 'health' },
+    h('thead', {}, h('tr', {}, h('th', {}, ''), roles.map((r) => h('th', {}, h('span', { class: 'rolebtn' }, roleSwatch(r), EMB_NAME[r]))))),
+    h('tbody', {},
+      row('status', (st) => { const S = STATUS[st.status] || STATUS.healthy; return badge(S.sev, S.label); }),
+      row('dimension · samples', (st) => `${st.dim} · ${fmtCount(st.rows)}`),
+      row('effective rank', (st) => `${fmt(st.erank, 3)} / ${st.max_rank}`),
+      row('participation ratio', (st) => fmt(st.participation, 3)),
+      row('sample-specific energy', (st) => fmtPct(st.var_frac)),
+      row('top PC share', (st) => fmtPct(st.top1_frac)),
+      row('mean / min std', (st) => `${fmt(st.mean_std, 3)} / ${fmt(st.min_std, 3)}`),
+      row('low-variance dims', (st) => `${st.low_var_dims} / ${st.dim}`),
+      row('mean |corr| (off-diag)', (st) => fmt(st.corr_abs_mean, 3)),
+      row('mean cosine between samples', (st) => fmt(st.cos_mean, 3)),
+      row('mean norm · offset norm', (st) => `${fmt(st.mean_norm, 3)} · ${fmt(st.offset_norm, 3)}`)));
+  pending.push(() => drawSpectrum(spec, E, roles));
+  pending.push(() => drawStdMultiples(stdHost, E, roles));
+  pending.push(() => drawCorrMultiples(corrHost, E, roles));
+  const legend = h('div', { class: 'legend' }, roles.map((r) => h('span', {}, roleSwatch(r), `${EMB_NAME[r]} embeddings`)));
+  return card('Variance structure', 'Is the variance real, and spread across dimensions? Non-zero, well-spread variance is what rules out collapse.',
+    h('div', { class: 'two', style: { 'margin-top': '8px' } },
+      h('div', {}, h('div', { class: 'panel-title', style: { 'margin-top': 0 } }, h('h3', {}, 'Eigenvalue spectrum'), h('span', { class: 'cap' }, 'share of variance per principal component (log)')), legend, spec),
+      h('div', { class: 'scroll-x' }, table)),
+    h('div', { class: 'panel-title' }, h('h3', {}, 'Per-dimension standard deviation'), h('span', { class: 'cap' }, 'sorted high → low, shared y-axis; the line marks the low-variance threshold (1% of the largest)')),
+    stdHost,
+    h('div', { class: 'panel-title' }, h('h3', {}, 'Dimension correlation |r|'), h('span', { class: 'cap' }, 'redundant dimensions light up off the diagonal')),
+    corrHost);
+}
+function drawSpectrum(host, E, roles) {
+  const W = Math.max(260, host.clientWidth), Hh = 230, M = { l: 52, r: 14, t: 10, b: 34 };
+  const pw = W - M.l - M.r, ph = Hh - M.t - M.b;
+  const K = Math.max(2, ...roles.map((r) => E[r].spectrum.length));
+  const vals = roles.flatMap((r) => E[r].spectrum.filter((v) => v > 0));
+  const floor = Math.max(1e-7, vals.length ? Math.min(...vals) : 1e-3);
+  const y = scaleLog(floor * 0.7, 1.2, M.t + ph, M.t);
+  const x = K > 24 ? scaleLog(1, K, M.l, M.l + pw) : scaleLinear(1, K, M.l, M.l + pw);
+  const svg = s('svg', { width: W, height: Hh, class: 'chart', role: 'img', 'aria-label': 'Eigenvalue spectrum per embedding set' });
+  for (const t of y.ticks()) {
+    svg.append(s('line', { x1: M.l, x2: W - M.r, y1: y(t), y2: y(t), class: 'grid' }));
+    svg.append(s('text', { x: M.l - 6, y: y(t) + 4, class: 'tick', 'text-anchor': 'end' }, fmtTick(t)));
+  }
+  const xt = K > 24 ? x.ticks().filter((t) => t >= 1) : niceTicks(1, K, 5).filter((t) => Number.isInteger(t) && t >= 1);
+  for (const t of xt) svg.append(s('text', { x: x(t), y: Hh - 18, class: 'tick', 'text-anchor': 'middle' }, String(t)));
+  svg.append(s('line', { x1: M.l, x2: W - M.r, y1: M.t + ph, y2: M.t + ph, class: 'axis' }));
+  svg.append(s('text', { x: M.l + pw / 2, y: Hh - 3, class: 'atitle', 'text-anchor': 'middle' }, 'principal component'));
+  for (const r of roles) {
+    const pts = E[r].spectrum.map((v, i) => [x(i + 1), y(Math.max(v || 0, floor * 0.7))]);
+    svg.append(s('path', { d: 'M' + pts.map((p) => p.join(',')).join('L'), style: { fill: 'none', stroke: roleColor(r), 'stroke-width': '2px', 'stroke-linejoin': 'round' } }));
+  }
+  const cross = s('line', { y1: M.t, y2: M.t + ph, class: 'cross', style: { display: 'none' } });
+  svg.append(cross);
+  const hit = s('rect', { x: M.l, y: M.t, width: pw, height: ph, class: 'hit' });
+  hit.addEventListener('mousemove', (e) => {
+    const rc = svg.getBoundingClientRect(), px = e.clientX - rc.left;
+    let best = 1, bd = Infinity;
+    for (let i = 1; i <= K; i++) { const d = Math.abs(x(i) - px); if (d < bd) { bd = d; best = i; } }
+    cross.setAttribute('x1', x(best)); cross.setAttribute('x2', x(best)); cross.style.display = '';
+    showTip(`<b>component ${best}</b><table>${roles.map((r) => `<tr><td>${EMB_NAME[r]}</td><td>${fmtPct(E[r].spectrum[best - 1])}</td></tr>`).join('')}</table>`, e.clientX, e.clientY);
+  });
+  hit.addEventListener('mouseleave', () => { cross.style.display = 'none'; hideTip(); });
+  svg.append(hit);
+  host.append(svg);
+}
+function drawStdMultiples(host, E, roles) {
+  const ymax = Math.max(1e-12, ...roles.map((r) => E[r].max_std || 0));
+  const cells = roles.map(() => host.appendChild(h('div'))); // lay out all cells before measuring
+  roles.forEach((r, ri) => {
+    const st = E[r];
+    const cell = cells[ri];
+    const W = Math.max(200, cell.clientWidth), Hh = 120, M = { l: 40, r: 6, t: 8, b: 18 };
+    const pw = W - M.l - M.r, ph = Hh - M.t - M.b;
+    const vals = st.std.map((v) => v || 0).sort((a, b) => b - a), n = vals.length, bw = pw / n;
+    const y = scaleLinear(0, ymax * 1.05, M.t + ph, M.t);
+    const svg = s('svg', { width: W, height: Hh, class: 'chart', role: 'img', 'aria-label': `${EMB_NAME[r]} per-dimension std` });
+    for (const t of y.ticks()) {
+      svg.append(s('line', { x1: M.l, x2: W - M.r, y1: y(t), y2: y(t), class: 'grid' }));
+      svg.append(s('text', { x: M.l - 5, y: y(t) + 4, class: 'tick', 'text-anchor': 'end' }, fmtTick(t)));
+    }
+    const gap = bw > 4 ? 1 : 0;
+    vals.forEach((v, i) => {
+      if (!v) return;
+      const top = y(v), w = Math.max(0.6, bw - gap);
+      svg.append(s('rect', { x: M.l + i * bw, y: top, width: w, height: Math.max(0.5, M.t + ph - top), style: { fill: roleColor(r) } }));
+    });
+    svg.append(s('line', { x1: M.l, x2: W - M.r, y1: M.t + ph, y2: M.t + ph, class: 'axis' }));
+    if (st.low_var_thresh != null) svg.append(s('line', { x1: M.l, x2: W - M.r, y1: y(st.low_var_thresh), y2: y(st.low_var_thresh), class: 'ref' }));
+    svg.append(s('text', { x: M.l, y: Hh - 4, class: 'tick' }, '1'));
+    svg.append(s('text', { x: W - M.r, y: Hh - 4, class: 'tick', 'text-anchor': 'end' }, String(n)));
+    const hit = s('rect', { x: M.l, y: M.t, width: pw, height: ph, class: 'hit' });
+    hit.addEventListener('mousemove', (e) => {
+      const rc = svg.getBoundingClientRect(), i = Math.max(0, Math.min(n - 1, Math.floor((e.clientX - rc.left - M.l) / bw)));
+      showTip(`<table><tr><td>rank</td><td>${i + 1} of ${n}</td></tr><tr><td>std</td><td>${esc(fmt(vals[i], 3))}</td></tr></table>`, e.clientX, e.clientY);
+    });
+    hit.addEventListener('mouseleave', hideTip);
+    svg.append(hit);
+    cell.append(h('h4', {}, roleSwatch(r), `${EMB_NAME[r]} embeddings`), svg,
+      h('div', { class: 'cap' }, `${st.low_var_dims} of ${st.dim} dims below ${fmt(st.low_var_thresh, 2)} · mean std ${fmt(st.mean_std, 3)}`));
+  });
+}
+function drawCorrMultiples(host, E, roles) {
+  const cells = roles.map(() => host.appendChild(h('div')));
+  for (const [ri, r] of roles.entries()) {
+    const st = E[r], cell = cells[ri];
+    cell.append(h('h4', {}, roleSwatch(r), `${EMB_NAME[r]} embeddings`));
+    const hm = st.corr;
+    if (!hm) { cell.append(h('div', { class: 'cap' }, 'Not enough variance to compute correlations.')); continue; }
+    const side = Math.min(220, Math.max(120, cell.clientWidth));
+    const cv = h('canvas', { role: 'img', 'aria-label': `${EMB_NAME[r]} correlation matrix` });
+    const ctx = setupCanvas(cv, side, side);
+    const bytes = decodeQ(hm), ramp = seqRamp(), lo = hm.lo ?? 0, hi = hm.hi ?? 1;
+    const val = (b) => lo + (b / 254) * (hi - lo);
+    const c = side / hm.cols;
+    for (let i = 0; i < hm.rows; i++) for (let j = 0; j < hm.cols; j++) {
+      const b = bytes[i * hm.cols + j];
+      ctx.fillStyle = b === 255 ? cssVar('--nan') : rgb(ramp(val(b)));
+      ctx.fillRect(Math.floor(j * c), Math.floor(i * c), Math.ceil(c), Math.ceil(c));
+    }
+    cv.addEventListener('mousemove', (e) => {
+      const rc = cv.getBoundingClientRect(), j = Math.floor((e.clientX - rc.left) / c), i = Math.floor((e.clientY - rc.top) / c);
+      if (i < 0 || j < 0 || i >= hm.rows || j >= hm.cols) return hideTip();
+      const pooled = hm.rows < st.dim;
+      showTip(`<table><tr><td>dims</td><td>${pooled ? `block ${i}, ${j}` : `${i}, ${j}`}</td></tr><tr><td>|r|${pooled ? ' (avg)' : ''}</td><td>${fmt(val(bytes[i * hm.cols + j]), 3)}</td></tr></table>`, e.clientX, e.clientY);
+    });
+    cv.addEventListener('mouseleave', hideTip);
+    cell.append(cv, h('div', { class: 'cap' }, `mean off-diagonal |r| ${fmt(st.corr_abs_mean, 3)}`));
+  }
+  host.append(h('div', { class: 'scalebar', style: { 'align-self': 'end' } }, h('span', {}, '0'),
+    h('span', { class: 'grad', style: { background: gradientCss(seqRamp(), 0, 1) } }), h('span', {}, '1'), h('span', { class: 'muted' }, '|correlation|')));
+}
+
+/* ---- prediction */
+function predictionCard(J) {
+  const Pr = J.prediction, Hs = Pr.horizons || [];
+  const chart = h('div'), hist = h('div');
+  const notes = [];
+  const [sev, lab] = predictorVerdict(J);
+  if (sev !== 'good') {
+    const why = sev === 'critical' && J.embeddings.target && J.embeddings.target.status === 'collapsed'
+      ? 'The loss looks small only because every target embedding is (nearly) the same vector. R² compares the error with the target’s own variance, which exposes this.'
+      : 'Check the landscape for whether predictions track their targets.';
+    notes.push(h('div', { class: 'warnlist' }, h('div', {}, sevIcon(sev), h('b', {}, lab), h('span', { class: 'sec' }, why))));
+  }
+  const metricSel = h('div', { class: 'seg' }, [['r2', 'R²'], ['cos', 'Cosine'], ['mse', 'MSE']].map(([k, l]) =>
+    h('button', { 'aria-pressed': String(state.pmetric === k), onclick: () => { state.pmetric = k; renderJepa(); } }, l)));
+  pending.push(() => {
+    if (Hs.length > 1) drawHorizon(chart, Hs);
+    else {
+      const o = Pr.overall;
+      chart.append(h('table', { class: 'stats' }, h('tbody', {}, [['R²', fmt(o.r2)], ['cosine', fmt(o.cos)], ['MSE', fmt(o.mse)],
+        ['copy-context R²', fmt(o.copy_r2)], ['target variance', fmt(o.target_var)], ['prediction variance', fmt(o.pred_var)]]
+        .map(([k, v]) => h('tr', {}, h('td', {}, k), h('td', {}, v))))));
+    }
+    if (Pr.err_hist && Pr.err_hist.hist) drawHist(hist, Pr.err_hist);
+  });
+  return card('Prediction quality', `JEPA loss ${fmt(J.loss, 4)} on the analysis batch. R² is 1 − error ÷ target variance: 0 matches predicting the mean target, and the copy-context baseline predicts the context embedding unchanged.`,
+    notes,
+    h('div', { class: 'two', style: { 'margin-top': '8px' } },
+      h('div', {}, h('div', { class: 'panel-title', style: { 'margin-top': 0 } }, h('h3', {}, Hs.length > 1 ? 'By rollout horizon' : 'Summary'), Hs.length > 1 && h('span', { class: 'right' }, metricSel)),
+        Hs.length > 1 && h('div', { class: 'legend' }, h('span', {}, roleSwatch('prediction'), 'Predictor'), h('span', {}, h('i', { class: 'sw', style: { background: 'var(--other)' } }), 'Copy-context baseline')),
+        chart),
+      h('div', {}, h('div', { class: 'panel-title', style: { 'margin-top': 0 } }, h('h3', {}, 'Per-sample prediction error'), h('span', { class: 'cap' }, 'MSE per row'),
+        h('label', { class: 'right' }, h('input', { type: 'checkbox', checked: state.histLog, onchange: (e) => { state.histLog = e.target.checked; renderJepa(); } }), 'Log counts')), hist)));
+}
+function drawHorizon(host, Hs) {
+  const key = state.pmetric, base = { r2: 'copy_r2', cos: 'copy_cos', mse: 'copy_mse' }[key];
+  const W = Math.max(260, host.clientWidth), Hh = 220, M = { l: 52, r: 16, t: 12, b: 34 };
+  const pw = W - M.l - M.r, ph = Hh - M.t - M.b, n = Hs.length;
+  const series = [{ k: key, color: 'var(--s3)', name: 'Predictor' }];
+  if (Hs.some((x) => x[base] != null)) series.push({ k: base, color: 'var(--other)', name: 'Copy-context baseline' });
+  const vals = series.flatMap((sr) => Hs.map((x) => x[sr.k])).filter((v) => v != null);
+  let y;
+  if (key === 'mse') y = scaleLog(Math.max(1e-12, Math.min(...vals)) / 1.5, Math.max(...vals) * 1.5, M.t + ph, M.t);
+  else { const lo = Math.min(0, ...vals), hi = Math.max(1, ...vals); y = scaleLinear(lo - (hi - lo) * 0.05, hi, M.t + ph, M.t); }
+  const x = (i) => M.l + (n === 1 ? pw / 2 : (i * pw) / (n - 1));
+  const svg = s('svg', { width: W, height: Hh, class: 'chart', role: 'img', 'aria-label': 'Prediction quality by rollout horizon' });
+  for (const t of y.ticks()) {
+    svg.append(s('line', { x1: M.l, x2: W - M.r, y1: y(t), y2: y(t), class: t === 0 ? 'axis' : 'grid' }));
+    svg.append(s('text', { x: M.l - 6, y: y(t) + 4, class: 'tick', 'text-anchor': 'end' }, fmtTick(t)));
+  }
+  Hs.forEach((_, i) => svg.append(s('text', { x: x(i), y: Hh - 16, class: 'tick', 'text-anchor': 'middle' }, `t+${i + 1}`)));
+  svg.append(s('text', { x: M.l + pw / 2, y: Hh - 2, class: 'atitle', 'text-anchor': 'middle' }, 'rollout horizon'));
+  for (const sr of series) {
+    const pts = Hs.map((hz, i) => (y.valid(hz[sr.k]) ? [x(i), y(hz[sr.k])] : null)).filter(Boolean);
+    if (pts.length > 1) svg.append(s('path', { d: 'M' + pts.map((p) => p.join(',')).join('L'), style: { fill: 'none', stroke: sr.color, 'stroke-width': '2px' } }));
+    for (const p of pts) svg.append(s('circle', { cx: p[0], cy: p[1], r: 4, style: { fill: sr.color, stroke: 'var(--surface)', 'stroke-width': '2px' } }));
+  }
+  const hit = s('rect', { x: M.l - 10, y: M.t, width: pw + 20, height: ph, class: 'hit' });
+  hit.addEventListener('mousemove', (e) => {
+    const rc = svg.getBoundingClientRect(), i = n === 1 ? 0 : Math.max(0, Math.min(n - 1, Math.round(((e.clientX - rc.left - M.l) / pw) * (n - 1))));
+    const hz = Hs[i];
+    showTip(`<b>t+${i + 1}</b><table><tr><td>R²</td><td>${fmt(hz.r2, 3)}</td></tr><tr><td>cosine</td><td>${fmt(hz.cos, 3)}</td></tr><tr><td>MSE</td><td>${fmt(hz.mse, 3)}</td></tr>`
+      + (hz.copy_r2 != null ? `<tr><td>copy R²</td><td>${fmt(hz.copy_r2, 3)}</td></tr>` : '') + '</table>', e.clientX, e.clientY);
+  });
+  hit.addEventListener('mouseleave', hideTip);
+  svg.append(hit);
+  host.append(svg);
+}
+
+/* ---- influence */
+const IMETRICS = {
+  d_loss: { label: 'Δloss', desc: 'relative change in JEPA loss when the module output is replaced by its batch mean', f: fmtSigned },
+  pred_drift: { label: 'Prediction drift', desc: 'how far predictions move (1 ≈ sample information destroyed)', f: (v) => fmt(v, 3) },
+  ctx_drift: { label: 'Context drift', desc: 'how far context embeddings move', f: (v) => fmt(v, 3) },
+  tgt_drift: { label: 'Target drift', desc: 'how far target embeddings move', f: (v) => fmt(v, 3) },
+  attr: { label: 'Gradient × activation', desc: 'Σ |∂loss/∂output · output| on the clean run', f: (v) => fmt(v, 3) },
+};
+function barRows(items, f, onClick) {
+  const vals = items.map((i) => i.value);
+  const lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const span = hi - lo || 1;
+  const pos = (v) => ((v - lo) / span) * 100;
+  return h('div', { class: 'bars' }, items.map((it) => {
+    const a = pos(Math.min(0, it.value)), b = pos(Math.max(0, it.value));
+    return h('div', {
+      class: 'brow', onclick: onClick ? () => onClick(it) : null, style: onClick ? null : { cursor: 'default' },
+      onmousemove: (e) => showTip(it.tip, e.clientX, e.clientY), onmouseleave: hideTip,
+    },
+    h('span', { class: 'bl', title: it.label }, h('i', { class: 'role-tag', style: { background: it.color } }), it.label),
+    h('div', { class: 'track' },
+      h('div', { class: 'fill', style: { left: a + '%', width: Math.max(0.4, b - a) + '%', background: it.color, 'border-radius': it.value >= 0 ? '0 4px 4px 0' : '4px 0 0 4px' } }),
+      lo < 0 && h('div', { class: 'zero', style: { left: pos(0) + '%' } })),
+    h('span', { class: 'bv' }, f(it.value)));
+  }));
+}
+function inflTip(title, r) {
+  const rows = [['Δloss', fmtSigned(r.d_loss)], ['prediction drift', fmt(r.pred_drift, 3)], ['context drift', fmt(r.ctx_drift, 3)],
+    ['target drift', fmt(r.tgt_drift, 3)], ['grad × act', fmt(r.attr, 3)]];
+  return `<b>${esc(title)}</b><table>${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('')}</table>${r.error ? `<div class="warn">${esc(r.error)}</div>` : ''}`;
+}
+function influenceCard(J) {
+  const I = J.influence, im = IMETRICS[state.imetric];
+  const group = (m) => (m.role ? m.role.split('+')[0] : 'other');
+  let recs = (I.modules || []).filter((r) => r[state.imetric] != null);
+  if (state.igroup !== 'all') recs = recs.filter((r) => group(D.mods[r.module]) === state.igroup);
+  if (state.ileaf) recs = recs.filter((r) => D.mods[r.module].leaf);
+  recs.sort((a, b) => Math.abs(b[state.imetric]) - Math.abs(a[state.imetric]));
+  const top = recs.slice(0, 25);
+  const items = top.map((r) => {
+    const m = D.mods[r.module];
+    return { label: m.path, value: r[state.imetric], color: roleColor(m.role || 'other'), mod: m, tip: inflTip(m.path, r) + `<div class="muted">${esc(m.type)}${m.role ? ' · ' + esc(roleName(m.role)) : ''}</div>` };
+  });
+  const goto = (it) => {
+    state.metric = state.imetric === 'attr' ? 'attr' : state.imetric === 'pred_drift' ? 'abl_drift' : 'abl_loss';
+    if (!it.mod.leaf) state.scope = 'all';
+    state.sel = { module: it.mod.id, call: 0 };
+    expandTo(it.mod.id);
+    $('#metric').value = state.metric;
+    $('#scope').value = state.scope;
+    setView('signals');
+  };
+  const groups = [['all', 'All'], ['context', 'Context enc.'], ['target', 'Target enc.'], ['predictor', 'Predictor']]
+    .filter(([g]) => g === 'all' || (I.modules || []).some((r) => group(D.mods[r.module]) === g));
+  const controls = h('div', { class: 'controls' },
+    h('label', { class: 'field' }, 'Measure', h('select', { onchange: (e) => { state.imetric = e.target.value; renderJepa(); } },
+      Object.entries(IMETRICS).map(([k, v]) => h('option', { value: k, selected: k === state.imetric }, v.label)))),
+    h('div', { class: 'seg' }, groups.map(([g, l]) => h('button', { 'aria-pressed': String(state.igroup === g), onclick: () => { state.igroup = g; renderJepa(); } }, l))),
+    h('label', { class: 'field' }, h('input', { type: 'checkbox', checked: state.ileaf, onchange: (e) => { state.ileaf = e.target.checked; renderJepa(); } }), 'Leaf modules only'));
+  const legend = h('div', { class: 'legend' }, ['context', 'target', 'predictor'].map((r) => h('span', {}, roleSwatch(r), ROLE_NAME[r])),
+    h('span', {}, h('i', { class: 'sw', style: { background: 'var(--other)' } }), 'Other'));
+  const ins = (I.inputs || []).filter((r) => r.d_loss != null || r.error);
+  const inItems = ins.filter((r) => r.d_loss != null).map((r) => ({ label: r.name, value: r.d_loss, color: 'var(--accent)', tip: inflTip(`input “${r.name}” shuffled`, r) + `<div class="muted">shape ${fmtShape(r.shape)}</div>` }));
+  return card('Module influence', `${im.label}: ${im.desc}. The clean loss is ${fmt(I.loss_clean, 4)}; ablation mode: ${I.mode}. Click a module to open it in Signals.`,
+    controls, legend,
+    I.attribution_error && h('div', { class: 'note' }, sevIcon('warning'), ' ', I.attribution_error),
+    h('div', { class: 'two' },
+      h('div', {}, items.length ? barRows(items, im.f, goto) : h('div', { class: 'empty' }, 'No modules with this measure in the current filter.'),
+        recs.length > 25 && h('div', { class: 'note' }, `Showing the top 25 of ${recs.length}.`)),
+      h('div', {}, h('div', { class: 'panel-title', style: { 'margin-top': 0 } }, h('h3', {}, 'Input influence'), h('span', { class: 'cap' }, 'Δloss when one input is shuffled across the batch')),
+        inItems.length ? barRows(inItems, fmtSigned) : h('div', { class: 'empty' }, 'No batched tensor inputs to shuffle.'),
+        h('div', { class: 'note' }, 'Shuffling breaks the pairing between this input and everything else in the sample. A world model that ignores its actions shows near-zero drift for the action input.'))));
+}
+
+/* ------------------------------------------------------------------ loading */
+function showEmpty(msg) {
+  D = null;
+  $('#model-name').textContent = '';
+  $('#meta').innerHTML = '';
+  const root = $('#root');
+  root.innerHTML = '';
+  if (msg) root.append(h('div', { class: 'err' }, msg));
+  root.append(h('div', { class: 'drop' },
+    h('h1', {}, 'Drop a trace file here'),
+    h('p', { class: 'sec' }, 'A .json or .json.gz written by sigtrace — or use “Open trace…” above.'),
+    h('pre', {}, `from sigtrace import SignalTracer
+
+with torch.inference_mode(), SignalTracer(model) as tracer:
+    model(inputs)
+
+tracer.save_html("trace.html")   # self-contained viewer
+tracer.save("trace.json.gz")     # or a raw trace for this page`)));
+}
+function load(T) {
+  try {
+    D = prepare(T);
+    state.step = 0; state.sel = null; state.tensor = null; state.expanded = new Set();
+    state.view = D.jepa && location.hash !== '#signals' ? 'jepa' : 'signals';
+    if (!D.jepa && METRICS[state.metric].jepa) state.metric = 'rms';
+    buildApp();
+  } catch (err) {
+    console.error(err);
+    showEmpty('Could not load trace: ' + err.message);
+  }
+}
+async function readFile(file) {
+  let stream = file.stream();
+  const head = new Uint8Array(await file.slice(0, 2).arrayBuffer());
+  if (head[0] === 0x1f && head[1] === 0x8b) stream = stream.pipeThrough(new DecompressionStream('gzip'));
+  const text = await new Response(stream).text();
+  load(JSON.parse(text));
+}
+$('#file').addEventListener('change', (e) => { const f = e.target.files[0]; if (f) readFile(f).catch((err) => showEmpty('Could not read file: ' + err.message)); });
+let dragDepth = 0;
+window.addEventListener('dragenter', (e) => { e.preventDefault(); dragDepth++; document.body.classList.add('dragging'); });
+window.addEventListener('dragleave', () => { if (--dragDepth <= 0) { dragDepth = 0; document.body.classList.remove('dragging'); } });
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault(); dragDepth = 0; document.body.classList.remove('dragging');
+  const f = e.dataTransfer.files[0];
+  if (f) readFile(f).catch((err) => showEmpty('Could not read file: ' + err.message));
+});
+
+/* ------------------------------------------------------------------ theme */
+function applyTheme(t) {
+  if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme');
+}
+applyTheme(store.get('sigtrace-theme'));
+$('#theme').addEventListener('click', () => {
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark'
+    || (!document.documentElement.hasAttribute('data-theme') && matchMedia('(prefers-color-scheme: dark)').matches);
+  const next = dark ? 'light' : 'dark';
+  applyTheme(next);
+  store.set('sigtrace-theme', next);
+  if (D) renderAll();
+});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (D) renderAll(); });
+
+/* ------------------------------------------------------------------ boot */
+window.addEventListener('error', (e) => {
+  const bar = h('div', { class: 'err' }, 'Viewer error: ' + (e.message || e));
+  document.body.prepend(bar);
+});
+(async () => {
+  let embedded = null;
+  try { embedded = JSON.parse($('#sigtrace-data').textContent); } catch { embedded = null; }
+  if (embedded) return load(embedded);
+  const url = new URLSearchParams(location.search).get('trace');
+  if (url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      let body = res.body;
+      if (/\.gz$/.test(url) && !(res.headers.get('content-encoding') || '').includes('gzip')) body = body.pipeThrough(new DecompressionStream('gzip'));
+      return load(JSON.parse(await new Response(body).text()));
+    } catch (err) { return showEmpty(`Could not fetch ${url}: ${err.message}`); }
+  }
+  showEmpty();
+})();
+})();
+</script>
+</body>
+</html>

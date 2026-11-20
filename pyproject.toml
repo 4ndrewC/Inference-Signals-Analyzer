@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sigtrace"
+version = "0.1.0"
+description = "Trace and visualise signals flowing through PyTorch modules during inference."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["torch>=2.0"]
+
+[project.optional-dependencies]
+dev = ["pytest"]
+
+[project.scripts]
+sigtrace = "sigtrace.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sigtrace*"]
+
+[tool.setuptools.package-data]
+"sigtrace.viewer" = ["index.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
